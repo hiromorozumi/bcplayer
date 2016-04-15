@@ -1,0 +1,38 @@
+// game over... lol :)
+
+@G
+
+MASTERVOLUME=70
+TEMPO=160
+V1=6 V2=6
+DELAYLEVEL=20
+DELAYTIME=200
+
+// channel 2 //////////////////////////////////
+
+@1
+
+ATTACKTIME=10
+PEAKTIME=20
+PEAKLEVEL=80
+DECAYTIME=250
+SUSTAINLEVEL=0
+RELEASETIME=0
+
+O4L8
+
+G>F:F[2FED]C<G:EC:::
+
+// channel 2 //////////////////////////////////
+
+@2
+
+ATTACKTIME=10
+PEAKTIME=20
+PEAKLEVEL=80
+DECAYTIME=250
+SUSTAINLEVEL=0
+RELEASETIME=0
+
+O3L8
+GG:G[2GAB]>C:<G:C:::
