@@ -92,6 +92,9 @@ int main()
 	{}
 
 	cout << "Music finished! ..bye :)\n";
-
+	
+	// close BCPlayer the right way
+	bcplayer.terminate();
+	
 	return 0;
 }
