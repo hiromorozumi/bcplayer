@@ -34,13 +34,15 @@ int main(){
 	
 	bool done = false;
 	int songIndex = 0;
-	string songName[] = {"bcsource/song1.txt", "bcsource/song2.txt", "bcsource/song3.txt", "bcsource/song4.txt"};
 	
+	// look in this music source folder... try replacing these files with your own - have fun! :)
+	string songName[] = {"bcsource/song1.txt", "bcsource/song2.txt", "bcsource/song3.txt", "bcsource/song4.txt"};
+
 	// let's begin by playing our first song
-	// the music will have to be on a quieter side than usual
+	// the music could be maybe a little quieter than usual
 	// so that sound effects can cut through the mix
 	bcplayer.loadMusic(songName[songIndex]);
-	bcplayer.setMusicVolume(40);
+	bcplayer.setMusicVolume(70);
 	bcplayer.startMusic();
 	
 	while(!done)
@@ -71,7 +73,7 @@ int main(){
 				songIndex = 0;
 			bcplayer.pauseMusic();
 			bcplayer.loadMusic(songName[songIndex]);
-			bcplayer.setMusicVolume(40);
+			bcplayer.setMusicVolume(70);
 			bcplayer.startMusic();
 			while(GetAsyncKeyState(VK_SPACE)){}	
 		}

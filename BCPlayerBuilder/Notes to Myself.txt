@@ -1,0 +1,96 @@
+//////////////////// BCPlayerBuilder ///////////////////////////////////////////////////////////
+//
+//
+//
+//		Note to myself...
+//		BCPlayer will consists of the following classes
+//
+//		Sound, SFX
+//		MData, DData, Astro, LFO, OSC, NOSC, DelayLine MML MPlayer
+//
+//				... all .cpp files for above -> assimilate to this BCPlayer.cpp
+//				... all .h files for above -> put in include/BC folder
+//
+//		Then make following changes:
+//
+//		1) include directives - rename all the header files to "BC/.."
+//
+//		2) comment out mp3 and libsndfile header inclusion in MPlayer
+//
+//		3) comment out exportToFile function in MPlayer class
+//
+//		4) make sure all <windows.h> includes are eliminated
+//
+//		5) make sure all windows.h related commands are erased
+//
+//		6) MPlayer class needs to know about SFX class #include "SFX.h"
+//
+//		7) Add bindSFX class + SFX class property to "MPlayer.h" (at bottom)
+//
+//		8) In MPlayer's getMix method - add snipet ... sfx.getOutput(channel);
+//
+//		9) MPlayer.h file - #include <portaudio> to #include "BC/portaudio"
+//
+//
+//
+
+
+FOLLOWING are markings that mark the parts to be
+rewritten by BCPlayerBuilder.exe ....
+
+-------------------------------------------------
+
+Comment out MPlayer::exportToFile function!
+
+------------------------------------------------
+
+
+/*-----[BCPLAYER][STARTCOMMENTOUT]-----*/
+This will change to /*
+
+
+/*-----[BCPLAYER][ENDCOMMENTOUT]-----*/
+This will change to */
+
+
+-------------------------------------------------
+
+MPlayer class: Add the following
+
+
+/*-----[BCPLAYER][CALLSFX]-----*/
+
+ This will change to..
+
+mix += sfx->getOutput(channel);
+
+---
+
+/*-----[BCPLAYER][ADDSFXBINDER]-----*/
+
+ This will change to..
+
+void MPlayer::bindSFX(SFX *sfxObj)
+{ sfx = sfxObj; }
+
+-------------------------------------------------
+
+MPlayer.h header: Add the following
+
+/*-----[BCPLAYER][INCLUDESFXHEADER]-----*/
+
+ This will change to..
+
+#include "SFX.h"
+
+---
+
+/*-----[BCPLAYER][ADDSFXPROPERTIES]-----*/
+
+ This will change to..
+
+void bindSFX(SFX* sfxObj);
+SFX* sfx;
+
+
+/////////////////////////////////////////////////////////////////////
