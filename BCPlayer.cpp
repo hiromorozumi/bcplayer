@@ -1,12 +1,13 @@
-////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////
 //
 //	BCPlayer class - BeepComp player engine module
 //
-////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////
 
 #include <string>
 #include <iostream>
 #include "BC/BCPlayer.h"
+#include "BC/SFX.h"
 
 using namespace std;
 
@@ -37,6 +38,9 @@ bool BCPlayer::initialize()
 	mplayer.pause();
 	mplayer.resetForNewSong();
 	
+	// bind SFX object to mplayer
+	mplayer.bindSFX(&sfx);
+	
 	return result;
 }
 
@@ -57,7 +61,7 @@ void BCPlayer::resetAudioDevice()
 
 // load a BeepComp source file and parse
 // gets BCPlayer ready to play the song immediately
-bool BCPlayer::loadFile(std::string &fileName)
+bool BCPlayer::loadMusic(const std::string &fileName)
 {
 	bool result = true;
 	mplayer.pause();
@@ -79,7 +83,7 @@ bool BCPlayer::loadFile(std::string &fileName)
 // load a BeepComp source file and return the source from that file as std::string
 // you can use this std::string to play without loading a file
 // - by using loadString(std::string) function
-std::string BCPlayer::loadFileToString(std::string &fileName)
+std::string BCPlayer::loadFileToString(const std::string &fileName)
 {
 	mplayer.pause();
 	mplayer.resetForNewSong();
@@ -89,7 +93,7 @@ std::string BCPlayer::loadFileToString(std::string &fileName)
 
 // takes a std::string and set up the player to play that string
 // after loading you can start() to play
-void BCPlayer::loadString(std::string &source)
+void BCPlayer::loadString(const std::string &source)
 {
 	mplayer.pause();
 	mplayer.cleanUpForNewFile();
@@ -100,20 +104,20 @@ void BCPlayer::loadString(std::string &source)
 }
 
 // starts playing the loaded song from the top
-void BCPlayer::start()
+void BCPlayer::startMusic()
 {
 	mplayer.goToBeginning();
 	mplayer.start();
 }
 
 // pauses the song
-void BCPlayer::pause()
+void BCPlayer::pauseMusic()
 {
 	mplayer.pause();
 }
 
 // restarts the song from paused location
-void BCPlayer::restart()
+void BCPlayer::restartMusic()
 {
 	mplayer.restart();
 }
@@ -131,7 +135,7 @@ void BCPlayer::disableLooping()
 }
 
 // check if the song has officially finished or not
-bool BCPlayer::finishedPlaying()
+bool BCPlayer::musicFinished()
 {
 	if( mplayer.reachedSongLastFramePure() || mplayer.isSongFinished() )
 		return true;
@@ -141,7 +145,7 @@ bool BCPlayer::finishedPlaying()
 
 // takes a percent value in float (0.0 to 100.0)
 // sets the player volume
-void BCPlayer::setVolumePercent(float percent)
+void BCPlayer::setMusicVolume(float percent)
 {
 	float newGain = static_cast<float>(percent) / 100.0f;
 	if(newGain > 1.0f) newGain = 1.0;
@@ -151,7 +155,7 @@ void BCPlayer::setVolumePercent(float percent)
 
 // returns the current player volume
 // as a percent value in float (0.0 to 100.0)
-float BCPlayer::getVolumePercent()
+float BCPlayer::getMusicVolume()
 {
 	// get master gain - float 0.0 to 1.0
 	return static_cast<int>(mplayer.getMasterGain() * 100.0f);
@@ -170,6 +174,66 @@ void BCPlayer::seek(float percent)
 }
 
 
+//
+//
+//   SFX related functions...
+//
+//
+
+// load up a sound effect WAV file - must be 16bit - 44100hz
+// can be mono or stereo. but length must be within 5 seconds
+std::string BCPlayer::loadSFX(int slot, std::string filename)
+{
+	string strToReturn = "OK";
+	bool result = sfx.loadSound(slot, filename);
+	if(!result)
+		strToReturn = sfx.getErrorText(slot);
+	return strToReturn;
+}
+
+// set the volume of a specific SFX slot (0 to 100)
+void BCPlayer::setSFXVolume(int slot, int volumePercent)
+{
+	float g = static_cast<float>(volumePercent) / 100.0f;
+	sfx.setGain(slot, g);
+}
+
+// returns the current volume (0 - 100) of a specific SFX slot
+int BCPlayer::getSFXVolume(int slot)
+{
+	return static_cast<int>(sfx.getGain(slot) * 100.0f);
+}
+
+// set the stereo panning factor to a specific SFX slot
+// 0 << left-most ... right-most >> 100 
+void BCPlayer::setSFXPanning(int slot, int panningPercent)
+{
+	float p = static_cast<float>(panningPercent) / 100.0f;
+	sfx.setPanning(slot, p);
+}
+
+// get the current stereo panning factor of a specific SFX slot
+// 0 << left-most ... right-most >> 100 
+int BCPlayer::getSFXPanning(int slot)
+{
+	return static_cast<int>(sfx.getPanning(slot) * 100.0f);
+}
+
+// play the specified SFX slot from beginning
+void BCPlayer::startSFX(int slot)
+{ sfx.start(slot); }
+
+// stop the specified SFX slot - will not remember where you cut it off
+void BCPlayer::stopSFX(int slot)
+{ sfx.stop(slot); }
+
+// pause the specified SFX slot - you can resume from that point later
+void BCPlayer::pauseSFX(int slot)
+{ sfx.pause(slot); }
+
+// resume the specified SFX slot from where you paused
+void BCPlayer::resumeSFX(int slot)
+{ sfx.resume(slot); }
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -181,11 +245,16 @@ void BCPlayer::seek(float percent)
 //		Note to myself...
 //		In the section below, the contents of following cpp files should go 
 //
+//
+//		Sound, SFX
 //		MData, DData, Astro, LFO, OSC, NOSC, DelayLine MML MPlayer
+//
+//				... all .cpp files for above -> assimilate to this BCPlayer.cpp
+//				... all .h files for above -> put in include/BC folder
 //
 //		Then make following changes:
 //
-//		1) include directives - rename all the header files to "BC/.."					 
+//		1) include directives - rename all the header files to "BC/.."
 //
 //		2) comment out mp3 and libsndfile header inclusion in MPlayer
 //
@@ -195,11 +264,356 @@ void BCPlayer::seek(float percent)
 //
 //		5) make sure all windows.h related commands are erased
 //
+//		6) MPlayer class needs to know about SFX class #include "SFX.h"
+//
+//		7) Add bindSFX class + SFX class property to "BC/MPlayer.h" (at bottom)
+//
+//		8) In MPlayer's getMix method - add snipet ... sfx.getOutput(channel);
+//
+//		9) MPlayer.h file - #include <portaudio> to #include "BC/portaudio"
+
 
 //////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
+
+
+
+
+////////////////////////////////////////////////////////////
+// Sound class implementation //////////////////////////////
+
+#include <iostream>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include "BC/sndfile.h"
+#include "BC/Sound.h"
+
+using namespace std;
+
+// constructor - initializes all variables at once
+Sound::Sound()
+{
+	stereo = false; // monoral by default
+	error = "(no error yet)";
+	leftData.push_back(0.0); // have a dummy value to start
+	rightData.push_back(0.0);
+	dataSize = min(leftData.size(), rightData.size());
+	gain = 0.85f;
+	leftGain = 0.85f;
+	rightGain = 0.85f;
+	panning = 0.5f;
+	pos = 0;
+	playing = false;
+}
+
+bool Sound::isStereo()
+{ return stereo; }
+
+std::string Sound::getErrorText()
+	{ return error; }
+
+// load sound data from a 16bit WAV file
+// it can be mono or stereo... but must be within 5 seconds
+bool Sound::loadFile(const std::string &filename)
+{	
+	// cout << "beginning of Sound class - loadFile " << filename << endl;
+
+	// open sound file
+	SF_INFO sndInfo;
+	SNDFILE *sndFile = sf_open(filename.c_str(), SFM_READ, &sndInfo);
+	if(sndFile==NULL)
+	{
+		error = "Error reading file: " + filename;
+		return false;
+	}
+	
+	// check format
+	if( (sndInfo.format != (SF_FORMAT_WAV | SF_FORMAT_PCM_16) ) &&
+		(sndInfo.format != (SF_FORMAT_OGG | SF_FORMAT_VORBIS) ) )
+		{
+			error = "Wrong format: " + filename;
+			return false;
+		}
+	
+	// cout << sndInfo.frames << endl;
+	// cout << "format okay\n";
+		
+	// clear the sound data entirely
+	leftData.clear();
+	rightData.clear();
+	
+	bool readDone = false;
+	int framesRead;
+	int totalRead = 0;
+	bool mono = false;
+	
+	// if this is a mono file...
+	if(sndInfo.channels==1)
+		mono = true;
+	
+	// case - we have a mono file
+	if(mono==true)
+	{
+		while(!readDone)
+		{
+			framesRead = sf_readf_float(sndFile, readBuffer, BLOCK_SIZE); // we'll read 4092 samples - mono
+
+			for(int i=0; i<framesRead; i++)
+			{
+				leftData.push_back(readBuffer[i]); // just use left channel
+			}
+			totalRead += framesRead;
+			// cout << "totalRead: " << totalRead << endl;
+			
+			if(framesRead < BLOCK_SIZE) // if this was should be the last time...
+				readDone = true;
+			
+			if(framesRead > MAX_SECONDS*44100) // if file's too long, cut off and exit
+				readDone = true;
+		}
+	}
+	// we have a stereo file
+	else
+	{
+		while(!readDone)
+		{
+			framesRead = sf_readf_float(sndFile, readBuffer, BLOCK_SIZE); // read 4096 samples - stereo interleaved
+			
+			for(int i=0; i<framesRead; i++) // if you read 4096 frames, 8192 floats in array are returned
+			{
+				leftData.push_back(readBuffer[i*2]); // interleaved...
+				rightData.push_back(readBuffer[i*2+1]); // like (left, right), (left, right), ...
+			}
+			totalRead += framesRead;
+			// cout << "totalRead: " << totalRead << endl;
+
+			if(framesRead < BLOCK_SIZE) // if this was should be the last time...
+				readDone = true;
+				
+			if(framesRead > MAX_SECONDS*44100)
+				readDone = true;
+
+		}
+	}
+	sf_close(sndFile);
+	
+		// cout << "read done.. total read = " << totalRead << "\n";
+		// cout << "size of LEFT vector = " << leftData.size() << "\n";
+		// cout << "size of RIGHT vector = " << rightData.size() << "\n";	
+	
+	// update the dataSize..
+	dataSize = totalRead;
+	error = "(no error)"; // was success!
+	return true;
+}
+
+// set the main gain + left/right gain
+void Sound::setGain(float g)
+{
+	g = min(1.0f, max(0.0f, g));
+	gain = g;
+	leftGain = (gain * 2) * panning;
+	rightGain = (gain * 2) * (1.0f - panning);	
+}
+
+// returns the main channel gain
+float Sound::getGain()
+	{ return gain; }
+
+// panning factor 0 to 1
+// smaller << left -- bigger >> right
+void Sound::setPanning(float p)
+{
+	p = min(1.0f, max(0.0f, p));
+	panning = p;
+	leftGain = (gain * 2.0f) * (1.0f - p);
+	rightGain = (gain * 2.0f) * p;
+}
+
+// returns the panning factor
+float Sound::getPanning()
+	{ return panning; }
+
+void Sound::refresh()
+{  pos = 0; }	
+
+void Sound::start()
+{ 
+	refresh();
+	playing = true;
+}
+
+void Sound::stop()
+{
+	playing = false;
+	refresh();
+}
+
+void Sound::pause()
+	{ playing = false; }
+
+void Sound::resume()
+	{ playing = true; }
+	
+// returns the output at current pos
+// channel: 0 - left, 1 - right
+float Sound::update(int channel)
+{
+	if(!playing) // if this sound is not playing, return silence
+		return 0.0;
+
+	float output;
+	if(channel==0) // left channel
+	{
+		output = leftData[pos] * leftGain;
+	}
+	else // right channel
+	{
+		// if stereo, use right channel..
+		if(stereo)
+			output = rightData[pos] * rightGain;
+		else // if mono, just reuse left channel data
+			output = leftData[pos] * rightGain;
+			
+		// advance frames ONLY after processing right channel!
+		pos++;
+	}
+
+	if(pos >= dataSize) // reached end of the sound?
+	{
+		playing = false; // back to silence
+		refresh();
+	}
+	return output;
+}
+
+
+
+
+////////////////////////////////////////////////////
+// SFX class implementation ////////////////////////
+
+#include <string>
+#include <algorithm>
+#include "BC/SFX.h"
+
+using namespace std;
+
+SFX::SFX()
+{
+	compThreshold = 0.6f;
+	compRatio = 5.0f;
+}
+
+float SFX::getGain(int slot)
+{
+	if(slot >= 0 && slot < N_SLOTS)
+		return sound[slot].getGain();
+}
+
+void SFX::setGain(int slot, float g)
+{
+	if(slot >= 0 && slot < N_SLOTS)
+		sound[slot].setGain(g);	
+}
+
+float SFX::getPanning(int slot)
+{
+	if(slot >= 0 && slot < N_SLOTS)
+		return sound[slot].getPanning();	
+}
+
+void SFX::setPanning(int slot, float p)
+{
+	if(slot >= 0 && slot < N_SLOTS)
+		sound[slot].setPanning(p);	
+}
+
+std::string SFX::getErrorText(int slot)
+{ 
+	if(slot >= 0 && slot < N_SLOTS)
+		return sound[slot].getErrorText();
+}
+	
+bool SFX::loadSound(int slot, const std::string &filename)
+{
+	if(slot >= 0 && slot < N_SLOTS)
+		return sound[slot].loadFile(filename);
+	else
+		return false;
+}
+
+void SFX::start(int slot)
+{
+	if(slot >= 0 && slot < N_SLOTS)
+		sound[slot].start();
+}
+
+void SFX::stop(int slot)
+{
+	if(slot >= 0 && slot < N_SLOTS)
+		sound[slot].stop();
+}
+
+void SFX::pause(int slot)
+{
+	if(slot >= 0 && slot < N_SLOTS)
+		sound[slot].pause();	
+}
+
+void SFX::resume(int slot)
+{
+	if(slot >= 0 && slot < N_SLOTS)
+		sound[slot].resume();
+}
+
+// 0 - left, 1 - right
+float SFX::getOutput(int channel)
+{
+	float output = 0.0;
+	
+	// mix all sounds for this channel...
+	for(int i=0; i<N_SLOTS; i++)
+	{
+		output += sound[i].update(channel);
+	}
+	
+	// and compress... limit and send away
+	return min(0.99f, compress(output));
+}
+
+// compress mixed SFX signal
+float SFX::compress(float input)
+{
+	float output;
+
+	// if positive
+	if(input >= 0)
+	{
+		if(input < compThreshold)
+			return input;
+		else
+		{
+			output = compThreshold + ((input - compThreshold) / compRatio);
+		}
+	}
+
+	// if negative
+	if(input < 0)
+	{
+		if(input > -compThreshold)
+			return input;
+		else
+		{
+			output = -compThreshold + ((input + compThreshold) / compRatio);
+		}
+	}
+	
+	return output;
+}
 
 
 
@@ -345,7 +759,7 @@ double Astro::process(double freq)
 	else
 		statusChanged = false;
 	
-	// update frame coung
+	// update frame count
 	frameCount++;
 	if(frameCount >= oneCycleFrames)
 		frameCount = 0;
@@ -353,8 +767,13 @@ double Astro::process(double freq)
 	return processedFrequency;
 }
 
+// whenever Astro changes the frequency, statusChanged flag turns on
 bool Astro::stateChanged()
 	{ return statusChanged; }
+
+// forces the Astro effect cycle to begin from beginning (frameCount = 0)
+void Astro::refresh()
+	{ frameCount = 0;}
 
 
 
@@ -526,12 +945,15 @@ void OSC::setTable(int type)
 {
 	switch(type)
 	{
+		float maxAmp;
+		int oneCycleFrames;
+		
 		// sine table
 		case 0:
-		
+			maxAmp = 0.99f;
 			for(int i=0; i<OSC_TABLE_SIZE; i++)
 			{
-				table[i] = sin( TWO_PI * (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE) ) ) * 0.85;
+				table[i] = sin( TWO_PI * (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE) ) ) * maxAmp;
 			}
 			break;
 			
@@ -548,9 +970,107 @@ void OSC::setTable(int type)
 			}
 			break;
 		
-		default:
+		// sawthooth wave
+		case 2:
+			for(int i=0; i<OSC_TABLE_SIZE; i++)
+				table[i] = -0.99f  + (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE)) * 1.98f;
 			break;
+
+		// triangle wave
+		case 3:
+			for(int i=0; i<OSC_TABLE_SIZE/2; i++)
+				table[i] = -0.99f  + (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE/2)) * 1.98f;	
+			for(int i=OSC_TABLE_SIZE/2; i<OSC_TABLE_SIZE; i++)
+				table[i] = 0.99f  - (static_cast<float>(i-OSC_TABLE_SIZE/2) / static_cast<float>(OSC_TABLE_SIZE/2)) * 1.98f;
+			break;
+		
+		// sine wave with 3rd, 6th, 9th, 12th harmonics
+		case 4:
+		
+			maxAmp = 0.90f;
+			
+			// first order sine as base
+			for(int i=0; i<OSC_TABLE_SIZE; i++)
+				table[i] = sin( TWO_PI * (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE) ) ) * maxAmp;
+			
+			// then add 3rd harmonics
+			oneCycleFrames = OSC_TABLE_SIZE / 3;
+			for(int i=0; i<OSC_TABLE_SIZE; i++)
+				table[i] += sin(TWO_PI * (static_cast<float>(i%oneCycleFrames) / static_cast<float>(oneCycleFrames)))
+							* (maxAmp / 3.0f);
+			
+			// then add 6rd harmonics
+			oneCycleFrames = OSC_TABLE_SIZE / 6;
+			for(int i=0; i<OSC_TABLE_SIZE; i++)
+				table[i] += sin(TWO_PI * (static_cast<float>(i%oneCycleFrames) / static_cast<float>(oneCycleFrames)))
+							* (maxAmp / 6.0f);
+							
+			// then add 9rd harmonics
+			oneCycleFrames = OSC_TABLE_SIZE / 9;
+			for(int i=0; i<OSC_TABLE_SIZE; i++)
+				table[i] += sin(TWO_PI * (static_cast<float>(i%oneCycleFrames) / static_cast<float>(oneCycleFrames)))
+							* (maxAmp / 9.0f);			
+
+			// then add 12th harmonics
+			oneCycleFrames = OSC_TABLE_SIZE / 12;
+			for(int i=0; i<OSC_TABLE_SIZE; i++)
+				table[i] += sin(TWO_PI * (static_cast<float>(i%oneCycleFrames) / static_cast<float>(oneCycleFrames)))
+							* (maxAmp / 12.0f);		
+	
+		break;
+	
+		// sine wave with 2nd, 3rd, 4th harmonics
+		case 5:
+		
+			maxAmp = 0.68f;
+			
+			// first order sine as base
+			for(int i=0; i<OSC_TABLE_SIZE; i++)
+				table[i] = sin( TWO_PI * (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE) ) ) * maxAmp;
+			
+			// then add 2rd harmonics
+			oneCycleFrames = OSC_TABLE_SIZE / 2;
+			for(int i=0; i<OSC_TABLE_SIZE; i++)
+				table[i] += sin(TWO_PI * (static_cast<float>(i%oneCycleFrames) / static_cast<float>(oneCycleFrames)))
+							* (maxAmp / 2.0f);
+			
+			// then add 3rd harmonics
+			oneCycleFrames = OSC_TABLE_SIZE / 3;
+			for(int i=0; i<OSC_TABLE_SIZE; i++)
+				table[i] += sin(TWO_PI * (static_cast<float>(i%oneCycleFrames) / static_cast<float>(oneCycleFrames)))
+							* (maxAmp / 3.0f);
+							
+			// then add 4rd harmonics
+			oneCycleFrames = OSC_TABLE_SIZE / 4;
+			for(int i=0; i<OSC_TABLE_SIZE; i++)
+				table[i] += sin(TWO_PI * (static_cast<float>(i%oneCycleFrames) / static_cast<float>(oneCycleFrames)))
+							* (maxAmp / 4.0f);			
+
+			// then add 5rd harmonics
+			oneCycleFrames = OSC_TABLE_SIZE / 5;
+			for(int i=0; i<OSC_TABLE_SIZE; i++)
+				table[i] += sin(TWO_PI * (static_cast<float>(i%oneCycleFrames) / static_cast<float>(oneCycleFrames)))
+							* (maxAmp / 5.0f);								
+			
+			break;
+
+		// default is sine wave...
+		default:
+			maxAmp = 0.99f;
+			for(int i=0; i<OSC_TABLE_SIZE; i++)
+				table[i] = sin( TWO_PI * (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE) ) ) * maxAmp;
+			
+			break;
+			
 	}
+	
+	// limit...
+	for(int i=0; i<OSC_TABLE_SIZE; i++)
+	{
+		if(table[i]>0.99f) table[i] = 0.99f;
+		else if(table[i] < -0.99f) table[i] = -0.99f;
+	}	
+	
 }
 
 void OSC::setGain(float g)
@@ -681,6 +1201,10 @@ void OSC::setFrequency(double noteFreq)
 	// refresh LFO so it starts from beginning
 	if(lfoEnabled)
 		lfo.refresh();
+	
+	// refresh Astro effect so it starts from beginning
+	if(astroEnabled)
+		astro.refresh();
 }
 
 // set the phase increment to travel across wave table every frame
@@ -849,7 +1373,7 @@ void OSC::clearHistory()
 #include <algorithm>
 #include <iostream>
 #include <cstdlib>
-// #include <windows.h>
+//#?include <windows.h>
 #include <vector>
 #include "BC/NOSC.h"
 
@@ -942,7 +1466,7 @@ void NOSC::setDrumTone(int dType, double nMilSecAttack, double nMilSecPeak, doub
 	pStartLevel[dType] = pBeginningLevel;
 	levelFallDelta[dType] = peakLevel[dType] / static_cast<float>(NOSC_SAMPLE_RATE * nMilSecPTime/1000.0);
 	
-	// cout << "attack=" << nAttackFrames[dType] << " peakTime=" << nPeakFrames[dType] << " decayTime" << nDecayFrames[dType] << " envFrames=" << nEnvFrames[dType] << endl;
+	cout << "attack=" << nAttackFrames[dType] << " peakTime=" << nPeakFrames[dType] << " decayTime" << nDecayFrames[dType] << " envFrames=" << nEnvFrames[dType] << endl;
 }
 
 void NOSC::setNewDrum(int dType)
@@ -1220,7 +1744,7 @@ void DelayLine::clearBuffer()
 #include <math.h>
 #include <vector>
 #include <string>
-// #include <windows.h>
+//#?include <windows.h>
 #include "BC/MML.h"
 #include "BC/MData.h"
 #include "BC/DData.h"
@@ -1477,6 +2001,9 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 	//
 	// first parse the configuration part
 	//
+	
+	// start by resetting... wavetable = 1 (just to safeguard!)
+	player->osc[channel].setTable(1); // square wave	
 
 	bool configDone = false; // when all config statements are parsed, this gets set to true
 	size_t found;
@@ -1484,6 +2011,41 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 	while(!configDone)
 	{
 		configDone = true;
+		
+		// follow format -> setEnvelope(int attackTimeMS, int peakTimeMS, int decayTimeMS, 
+		//								int releaseTimeMS, float peakLV, float sustainLV)
+
+		// reset tone... to default
+		found = str.find("DEFAULTTONE");
+		if(found != string::npos)
+		{
+			configDone = false;
+			player->osc[channel].setEnvelope(0, 0, 0, 0, 0.99f, 0.99f);
+			str.erase(found, 11); // erase this statement
+		}
+		
+		// sets up a preset tone... pure beep!
+		found = str.find("PRESET=BEEP");
+		if(found != string::npos)
+		{
+			configDone = false;
+			player->osc[channel].setTable(1); // square wave
+			player->osc[channel].setEnvelope(0, 0, 0, 0, 0.65f, 0.65f);
+			str.erase(found, 11); // erase this statement
+		}
+		
+		found = str.find("WAVEFORM=");
+		if(found != string::npos)
+		{
+			configDone = false;
+			string strValue = str.substr(found+9,2); // get 2 digits following '='
+			int valueDigits = countDigits(strValue);
+			strValue = strValue.substr(0, valueDigits);
+			int value = atoi(strValue.c_str());
+			value = min(99, max(0, value)); // floor + ceil the value
+			player->osc[channel].setTable(value); // set wavetable for this value
+			str.erase(found, 9+valueDigits); // erase this statement
+		}
 
 		found = str.find("ATTACKTIME=");
 		if(str.find("ATTACKTIME=") != string::npos)
@@ -1491,6 +2053,7 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 			configDone = false;
 			string strValue = str.substr(found+11,4); // get 4 digits following '='
 			int valueDigits = countDigits(strValue);
+			strValue = strValue.substr(0, valueDigits);
 			int value = atoi(strValue.c_str());
 			value = min(9999, max(1, value)); // floor + ceil the value
 
@@ -1504,6 +2067,7 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 			configDone = false;
 			string strValue = str.substr(found+9,4); // get 4 digits following '='
 			int valueDigits = countDigits(strValue);
+			strValue = strValue.substr(0, valueDigits);
 			int value = atoi(strValue.c_str());
 			value = min(9999, max(1, value)); // floor + ceil the value
 
@@ -1517,6 +2081,7 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 			configDone = false;
 			string strValue = str.substr(found+10,4); // get 4 digits following '='
 			int valueDigits = countDigits(strValue);
+			strValue = strValue.substr(0, valueDigits);
 			int value = atoi(strValue.c_str());
 			value = min(9999, max(1, value)); // floor + ceil the value
 
@@ -1530,6 +2095,7 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 			configDone = false;
 			string strValue = str.substr(found+12,4); // get 4 digits following '='
 			int valueDigits = countDigits(strValue);
+			strValue = strValue.substr(0, valueDigits);
 			int value = atoi(strValue.c_str());
 			value = min(9999, max(1, value)); // floor + ceil the value
 
@@ -1543,6 +2109,7 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 			configDone = false;
 			string strValue = str.substr(found+10,8); // get 8 digits following '='
 			int valueDigits = countDigits(strValue);
+			strValue = strValue.substr(0, valueDigits);
 			double value = static_cast<double>( atoi(strValue.c_str()) );
 			value = min(100.0, max(0.01, value)); // floor + ceil the value
 			float valuef = static_cast<float>(value / 100.0);
@@ -1572,6 +2139,7 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 			configDone = false;
 			string strValue = str.substr(found+6,3); // get 3 digits following '='
 			int valueDigits = countDigits(strValue);
+			strValue = strValue.substr(0, valueDigits);
 			int value = atoi(strValue.c_str());
 			value = min(100, max(1, value) ); // floor + ceil the value
 
@@ -1601,6 +2169,7 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 			configDone = false;
 			string strValue = str.substr(found+9,4); // get 4 digits following '='
 			int valueDigits = countDigits(strValue);
+			strValue = strValue.substr(0, valueDigits);
 			int value = atoi(strValue.c_str());
 			value = min(2400, max(1, value)); // floor + ceil the value
 
@@ -1614,6 +2183,7 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 			configDone = false;
 			string strValue = str.substr(found+9,8); // get 3 digits following '='
 			int valueDigits = countDigits(strValue);
+			strValue = strValue.substr(0, valueDigits);
 			double value = static_cast<double>( atof(strValue.c_str()) );
 			value = min(100.0, max(0.1, value)); // floor + ceil the value
 
@@ -1627,6 +2197,7 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 			configDone = false;
 			string strValue = str.substr(found+8,4); // get 4 digits following '='
 			int valueDigits = countDigits(strValue);
+			strValue = strValue.substr(0, valueDigits);
 			int value = atoi(strValue.c_str());
 			value = min(3000, max(1, value)); // floor + ceil the value
 
@@ -1651,6 +2222,7 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 
 	int i = 0;
 	vector<int> leftBraces;
+	vector<int> repeatTimes;
 	char ch = ' ';
 	int leftBracePos = 0;
 	string strToCopy = "";
@@ -1664,6 +2236,27 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 		{
 			leftBraces.push_back(i); // push this position into stack
 			str.erase(i,1); // go ahead and erase this '{'
+			
+			char chNext = str.at(i); // this should be the char right after '{'
+			int numberRead = 0;
+			
+			// check if a number is followed...
+			if(chNext >= '0' && chNext <= '9')
+			{
+				numberRead = chNext - '0'; // set the num of times to duplicate at right brace
+				str.erase(i,1); // go ahead and erase this digit
+				if(numberRead==0) numberRead = 1;
+				
+				// make sure there aren't any more digits after this
+				while( (str.at(i)>='0'&&str.at(i)<='9') )
+					str.erase(i,1); // erase this digit
+			}
+			else
+				numberRead = 2; // repeat times not specified -> set to twice
+			
+			// push this number... it'll be popped when right brace is found
+			repeatTimes.push_back(numberRead);
+
 		}
 		else if (ch=='}') // right brace to close repeat
 		{
@@ -1673,10 +2266,20 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 				// pop last element from stack - gets the nearest pos of '{'
 				leftBracePos = leftBraces.back();
 				leftBraces.pop_back();
-
+				
+				// and get the number of times we should duplicate
+				int timesToDuplicate = repeatTimes.back();
+				repeatTimes.pop_back();
+				timesToDuplicate -= 1; // if repeat is x3, duplicate twice :)
+				
 				nCharsToCopy = i - leftBracePos; // n of chars to duplicate
 				strToCopy = str.substr(leftBracePos, nCharsToCopy); // str to be duplicated
-				str.insert(leftBracePos+nCharsToCopy, strToCopy);
+				
+				if(timesToDuplicate >=1 && timesToDuplicate <=8)
+				{
+					for(int i=0; i<timesToDuplicate; i++)
+						str.insert(leftBracePos+nCharsToCopy, strToCopy);
+				}
 			}
 		}
 		else if (ch=='$') // end of parse string
@@ -1895,6 +2498,14 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 					nNotes++;
 					tupletIndex++;
 				}
+				
+				else if(str.at(i)==':') // we have a rest...
+				{
+					i++; // advance index...
+					notes[tupletIndex] = 65535; // freq 65535 for rest
+					nNotes++;
+					tupletIndex++;
+				}
 
 				else if(str.at(i)=='~') // tie last note
 				{
@@ -1917,38 +2528,46 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 
 				else if (str.at(i) == ']') // closing brace - finalize tupletDone
 				{
-					int division = nNotes + nTied;
-					int eachTupletLength = wholeLength / division;
-					int remainder = wholeLength % division;
-
-					/*
-					cout << "TUPLETS" << endl << "wholeLength=" << wholeLength << " division=" << division << endl;
-					cout << " nNotes=" << nNotes << " nTied =" << nTied << endl;
-					for(int itr=0; itr<nNotes; itr++)
-						cout << " note=" << notes[itr] << " tie=" << tie[itr] << " / ";
-					cout << endl;
-					*/
-
-					// push tuplet data to mData
-					for(int j=0; j<nNotes; j++)
+					if( (nNotes + nTied) > 0) // if we have empty braces - skip altogether! (avoid div by 0)
 					{
-						// get
-						int lengthToWrite = eachTupletLength;
-						lengthToWrite += tie[j] * eachTupletLength;
-						if(j==0)
-							lengthToWrite += remainder;
-						// cout << "Writing length = " << lengthToWrite << endl;
+						int division = nNotes + nTied;
+						int eachTupletLength = wholeLength / division;
+						int remainder = wholeLength % division;
+	
+						/*
+						cout << "TUPLETS" << endl << "wholeLength=" << wholeLength << " division=" << division << endl;
+						cout << " nNotes=" << nNotes << " nTied =" << nTied << endl;
+						for(int itr=0; itr<nNotes; itr++)
+							cout << " note=" << notes[itr] << " tie=" << tie[itr] << " / ";
+						cout << endl;
+						*/
+	
+						// push tuplet data to mData
+						for(int j=0; j<nNotes; j++)
+						{
+							// get
+							int lengthToWrite = eachTupletLength;
+							lengthToWrite += tie[j] * eachTupletLength;
+							if(j==0)
+								lengthToWrite += remainder;
+							// cout << "Writing length = " << lengthToWrite << endl;
+							
+							// get frequency of the note...
+							double freqToWrite;
+							if(notes[j]==65535) // then we have a rest
+								freqToWrite = notes[j]; // use 65535 as freq, to signify a rest
+							else
+								freqToWrite = getFrequency(notes[j]);
 
-						// get frequency of the note
-						double freqToWrite = getFrequency(notes[j]);
-						// cout << "Writing freq = " << freqToWrite << endl;
-
-						// push this note data to mData object
-						output->freqNote.push_back(freqToWrite);
-						output->len.push_back(lengthToWrite);
-						output->param.push_back(0);
-						output->totalFrames += lengthToWrite;
-						framesWritten += lengthToWrite;
+							// cout << "Writing freq = " << freqToWrite << endl;
+	
+							// push this note data to mData object
+							output->freqNote.push_back(freqToWrite);
+							output->len.push_back(lengthToWrite);
+							output->param.push_back(0);
+							output->totalFrames += lengthToWrite;
+							framesWritten += lengthToWrite;
+						}
 					}
 
 					i++;
@@ -2081,6 +2700,7 @@ string MML::parseDrumSource(MPlayer* player)
 
 	int i = 0;
 	vector<int> leftBraces;
+	vector<int> repeatTimes;
 	char ch = ' ';
 	int leftBracePos = 0;
 	string strToCopy = "";
@@ -2094,6 +2714,26 @@ string MML::parseDrumSource(MPlayer* player)
 		{
 			leftBraces.push_back(i); // push this position into stack
 			str.erase(i,1); // go ahead and erase this '{'
+			
+			char chNext = str.at(i); // this should be the char right after '{'
+			int numberRead = 0;
+			
+			// check if a number is followed...
+			if(chNext >= '0' && chNext <= '9')
+			{
+				numberRead = chNext - '0'; // set the num of times to duplicate at right brace
+				str.erase(i,1); // go ahead and erase this digit
+				if(numberRead==0) numberRead = 1;
+				
+				// make sure there aren't any more digits after this
+				while( (str.at(i)>='0'&&str.at(i)<='9') )
+					str.erase(i,1); // erase this digit
+			}
+			else
+				numberRead = 2; // repeat times not specified -> set to twice
+			
+			// push this number... it'll be popped when right brace is found
+			repeatTimes.push_back(numberRead);
 		}
 		else if (ch=='}') // right brace to close repeat
 		{
@@ -2103,10 +2743,20 @@ string MML::parseDrumSource(MPlayer* player)
 				// pop last element from stack - gets the nearest pos of '{'
 				leftBracePos = leftBraces.back();
 				leftBraces.pop_back();
+				
+				// and get the number of times we should duplicate
+				int timesToDuplicate = repeatTimes.back();
+				repeatTimes.pop_back();
+				timesToDuplicate -= 1; // if repeat is x3, duplicate twice :)
 
 				nCharsToCopy = i - leftBracePos; // n of chars to duplicate
 				strToCopy = str.substr(leftBracePos, nCharsToCopy); // str to be duplicated
-				str.insert(leftBracePos+nCharsToCopy, strToCopy);
+				
+				if(timesToDuplicate >=1 && timesToDuplicate <=8)
+				{
+					for(int i=0; i<timesToDuplicate; i++)
+						str.insert(leftBracePos+nCharsToCopy, strToCopy);
+				}
 			}
 		}
 		else if (ch=='$') // end of parse string
@@ -2262,41 +2912,52 @@ string MML::parseDrumSource(MPlayer* player)
 					nTied++;
 					i++;
 				}
+				
+				else if(str.at(i)==':') // we have a rest...
+				{
+					i++; // advance index...
+					notes[tupletIndex] = 65535; // freq 65535 for rest
+					nNotes++;
+					tupletIndex++;
+				}
 
 				else if (str.at(i) == ']') // closing brace - finalize tupletDone
 				{
-					int division = nNotes + nTied;
-					int eachTupletLength = wholeLength / division;
-					int remainder = wholeLength % division;
-
-					/*
-					cout << "TUPLETS" << endl << "wholeLength=" << wholeLength << " division=" << division << endl;
-					cout << " nNotes=" << nNotes << " nTied =" << nTied << endl;
-					for(int itr=0; itr<nNotes; itr++)
-						cout << " note=" << notes[itr] << " tie=" << tie[itr] << " / ";
-					cout << endl;
-					*/
-
-					// push tuplet data to dData
-					for(int j=0; j<nNotes; j++)
+					if( (nNotes + nTied) > 0) // if we have a empty set of braces - skip altogether!
 					{
-						// get
-						int lengthToWrite = eachTupletLength;
-						lengthToWrite += tie[j] * eachTupletLength;
-						if(j==0)
-							lengthToWrite += remainder;
-						// cout << "Writing length = " << lengthToWrite << endl;
-
-						// get frequency of the note
-						int noteToWrite = notes[j];
-						// cout << "Writing freq = " << notesToWrite << endl;
-
-						// push this note data to mData object
-						dOutput->drumNote.push_back(noteToWrite);
-						dOutput->len.push_back(lengthToWrite);
-						dOutput->param.push_back(0);
-						dOutput->totalFrames += lengthToWrite;
-						framesWritten += lengthToWrite;
+						int division = nNotes + nTied;
+						int eachTupletLength = wholeLength / division;
+						int remainder = wholeLength % division;
+	
+						/*
+						cout << "TUPLETS" << endl << "wholeLength=" << wholeLength << " division=" << division << endl;
+						cout << " nNotes=" << nNotes << " nTied =" << nTied << endl;
+						for(int itr=0; itr<nNotes; itr++)
+							cout << " note=" << notes[itr] << " tie=" << tie[itr] << " / ";
+						cout << endl;
+						*/
+	
+						// push tuplet data to dData
+						for(int j=0; j<nNotes; j++)
+						{
+							// get
+							int lengthToWrite = eachTupletLength;
+							lengthToWrite += tie[j] * eachTupletLength;
+							if(j==0)
+								lengthToWrite += remainder;
+							// cout << "Writing length = " << lengthToWrite << endl;
+	
+							// get frequency of the note
+							int noteToWrite = notes[j];
+							// cout << "Writing freq = " << notesToWrite << endl;
+	
+							// push this note data to mData object
+							dOutput->drumNote.push_back(noteToWrite);
+							dOutput->len.push_back(lengthToWrite);
+							dOutput->param.push_back(0);
+							dOutput->totalFrames += lengthToWrite;
+							framesWritten += lengthToWrite;
+						}
 					}
 
 					i++;
@@ -2374,7 +3035,7 @@ string MML::parseDrumSource(MPlayer* player)
 				{
 					player->setBookmark(framesWritten);
 					
-					// cout << "Dr channel - Bookmarked! at ... " << player->getBookmark() << endl;
+					cout << "Dr channel - Bookmarked! at ... " << player->getBookmark() << endl;
 					// while(!GetAsyncKeyState(VK_SPACE)){} // DEBUG
 				}
 				i++;
@@ -2700,8 +3361,8 @@ int MML::countDigits(string snippet)
 	{
 		if(snippet.at(pos) >= '0' && snippet.at(pos) <= '9')
 			count++;
-		else if(snippet.at(pos) == '.')
-			count++;
+		// else if(snippet.at(pos) == '.') // maybe we don't need decimals at all!
+			// count++;
 		else if(snippet.at(pos)=='$')
 			done = true;
 		else
@@ -2735,9 +3396,15 @@ void MML::errLog(std::string errText1, std::string errText2)
 #include <string>
 #include <math.h>
 #include <cstdio>
-// #include <windows.h> // DEBUG
-// #include <sndfile.hh>
-// #include <lame/lame.h>
+//#?include <windows.h> // DEBUG
+
+/*----------
+
+#include <sndfile.hh>
+#include <lame/lame.h>
+
+----------*/
+
 #include "BC/MPlayer.h"
 
 const int MPlayer::SAMPLE_RATE = 44100;
@@ -2931,7 +3598,9 @@ int MPlayer::playerCallback (
 				{
 					songFinished = true;
 					playing = false;
-					/*
+					
+					/*----------
+					
 					// DEBUG
 					cout << "song officially finished!\n";
 					cout << "framePos = " << framePos << endl;
@@ -2940,7 +3609,8 @@ int MPlayer::playerCallback (
 					for(int i=0; i<9; i++)
 						cout << "channel " << i << " length = " << data[i].totalFrames << "\n";
 					cout << "d channel length = " << ddata.totalFrames << "\n";
-					*/
+					
+					----------*/
 				}
 			}
 
@@ -3096,12 +3766,12 @@ void MPlayer::close()
 	err = Pa_StopStream( stream );
 	if( err != paNoError ) handlePaError( err );
 
-	// cout << "pa stream stopped...";
+	cout << "pa stream stopped...";
 
 	err = Pa_CloseStream( stream );
 	if( err != paNoError ) handlePaError( err );
 
-	// cout << "pa stream closed...";
+	cout << "pa stream closed...";
 
     Pa_Terminate();
 }
@@ -3419,6 +4089,12 @@ float MPlayer::getMix(int channel)
 	// update delay - delay output is returned - so add to mix
 	if(delayEnabled)
 		mix += delay[channel].update(mix);
+	
+	// place holder for BCPlayer...
+	mix += sfx->getOutput(channel);
+	
+	// mix += sfx->getOutput(channel); // add the entire SFX mix
+										// for BCPlayer only!	
 
 	// apply master gain and compress
 	mix = compress(mix * masterGain);
@@ -3457,7 +4133,6 @@ float MPlayer::compress(float input)
 		{
 			output = -compThreshold + ((input + compThreshold) / compRatio);
 		}
-
 	}
 
 	return output;
@@ -3488,7 +4163,9 @@ float MPlayer::getMasterGain()
 void MPlayer::setMasterGain(float g)
 	{ masterGain = g; }
 
-/*
+
+/*----------
+
 std::string MPlayer::exportToFile(string filename)
 {
 
@@ -3603,7 +4280,9 @@ std::string MPlayer::exportToFile(string filename)
 		return "Invalid file type";
 	}
 }
-*/
+
+----------*/
+
 
 // fill the export buffer with music data for exporting
 // just a chunk at a time - from startFrame in the song
@@ -3770,7 +4449,6 @@ int MPlayer::fillExportBuffer(float* buffer, int framesToWrite, long startFrame,
 			{
 				writeFinished = true;
 
-				/*
 				// DEBUG
 				cout << "Export to write buffer - finished!\n";
 				cout << "framePos = " << framePos << endl;
@@ -3779,7 +4457,6 @@ int MPlayer::fillExportBuffer(float* buffer, int framesToWrite, long startFrame,
 				for(int i=0; i<9; i++)
 					cout << "channel " << i << " length = " << data[i].totalFrames << "\n";
 				cout << "d channel length = " << ddata.totalFrames << "\n";
-				*/
 
 				return framesWritten;
 			}
@@ -4111,3 +4788,13 @@ bool MPlayer::reachedSongLastFramePure()
 
 bool MPlayer::isSongFinished()
 { return songFinished; }
+
+void MPlayer::bindSFX(SFX *sfxObj)
+	{ sfx = sfxObj; }
+
+//void MPlayer::bindSFX(SFX *sfxObj)
+//{ sfx = sfxObj; }
+
+
+
+

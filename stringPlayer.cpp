@@ -18,7 +18,7 @@ int main(){
 		if(command!="QUIT")
 		{
 			bcplayer.loadString(command);
-			bcplayer.start();
+			bcplayer.startMusic();
 		}
 	}
 	

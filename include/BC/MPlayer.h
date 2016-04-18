@@ -18,7 +18,12 @@ class DelayLine;
 #include "DelayLine.h"
 #include "MData.h"
 #include "DData.h"
-#include "portaudio.h"
+#include "BC/portaudio.h"
+
+#include "SFX.h"
+
+//#include "SFX.h"
+
 
 class MPlayer
 {
@@ -145,6 +150,15 @@ public:
 	long getBookmark();
 	bool reachedSongLastFramePure();
 	bool isSongFinished();
+	
+	
+	
+	void bindSFX(SFX* sfxObj);
+	SFX* sfx;
+	
+	// void bindSFX(SFX* sfxObj);
+	// SFX* sfx;
+
 };
 
 #endif
