@@ -87,6 +87,6 @@ There are 16 possible slots (0-15). This example load a sound to slot #2 and pla
 
 These example programs will show you more....:
 
-[Simple Background Music Demo](https://github.com/hiromorozumi/bcplayer/blob/master/BCPlayerApp.cpp)
-[Play a String Source](https://github.com/hiromorozumi/bcplayer/blob/master/stringPlayer.cpp)
-[SFX Demo]()https://github.com/hiromorozumi/bcplayer/blob/master/SFXTest.cpp
+- [Simple Background Music Demo](https://github.com/hiromorozumi/bcplayer/blob/master/BCPlayerApp.cpp)
+- [Play a String Source](https://github.com/hiromorozumi/bcplayer/blob/master/stringPlayer.cpp)
+- [SFX Demo](https://github.com/hiromorozumi/bcplayer/blob/master/SFXTest.cpp)
