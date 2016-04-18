@@ -30,3 +30,30 @@ So if you want to use this library for your project, you will need to
 link against these libraries. The lib folder has the two necessary .lib files
 --- portaudio.lib and libsndfile, these should be linked to your program
 when you compile.
+
+
+Folder Structure
+----------------
+
+I would recommend setting up your project this way:
+
+
+    MyGameProject -----+----- include/ --------- BC/ ---------------- (many .h files)
+                       |         
+                       +----- lib/ ---------+--- portaudio_x86.lib       
+                       |                    |
+                       |                    +--- libsndfile-1.lib           				 
+                       |
+                       +----- BCPlayer.cpp
+                       |
+                       +----- main.cpp
+
+The BC folder inside the include folder has all the header files that BCPlayer needs.
+All you have to do to "include" to BCPlayer library is just add the following directive
+at the top your main function.
+
+    #include "BC/BCPlayer.h"
+
+The single BCPlayer.cpp file is the library. Let it sit next to your main function and
+just compile along with all your source code.					   
+And when you comile, remember to link against the two .lib files in the lib folder.
