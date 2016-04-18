@@ -100,10 +100,10 @@ Building Your Project with BCPlayer
 
 Bulletpoints of what should happen in your compilation:
 
-    - The **include** folder should have the **BC** folder inside it
-	- Tell the compiler to include your **include** folder
-    - Compile your source along with BCPlayer.cpp
-	- Link against **libsndfile** and **portaudio** libraries, which BCPlayer depends on
+- The **include** folder should have the **BC** folder inside it
+- Tell the compiler to include your **include** folder
+- Compile your source along with BCPlayer.cpp
+- Link against **libsndfile** and **portaudio** libraries, which BCPlayer depends on
 
 So, if you're using MinGW, you can build your project like this:
 
