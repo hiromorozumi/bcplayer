@@ -107,4 +107,4 @@ Bulletpoints of what should happen in your compilation:
 
 So, if you're using MinGW, you can build your project like this:
 
-    g++ BCPlayer.cpp myApp.cpp -I/.include -L/.lib lib/libsndfile-1.lib lib/portaudio_x86.lib -o myApp
+    g++ BCPlayer.cpp myApp.cpp -I/.include lib/libsndfile-1.lib lib/portaudio_x86.lib -o myApp
