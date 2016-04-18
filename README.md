@@ -49,7 +49,7 @@ I would recommend setting up your project this way:
                        +----- main.cpp
 
 
-					   The BC folder inside the include folder has all the header files that BCPlayer needs.
+The BC folder inside the include folder has all the header files that BCPlayer needs.
 All you have to do to "include" to BCPlayer library is just add the following directive
 at the top your main function.
 
@@ -64,8 +64,11 @@ How to Use the Library
 ----------------------
 
 Using BCPlayer is pretty easy.
+Begin by including the header in your source:
 
-First instantiate a BCPlayer object.
+    #include "BC/BCPlayer.h"
+	
+In your program where you want to use BCPlayer, instantiate a BCPlayer object.
 
     BCPlayer bcplayer;
 	
@@ -76,7 +79,7 @@ Then, to load music from a BeepComp source text file and play it:
 
 And... you can do other things like changing volume or setting up your music to loop etc.:
 
-    bcplayer.set
+    bcplayer.setMusicVolume(60); // scale to 100
 	bcplayer.enableLooping()
 
 You can play sound effects on top your music.
@@ -90,3 +93,18 @@ These example programs will show you more....:
 - [Simple Background Music Demo](https://github.com/hiromorozumi/bcplayer/blob/master/BCPlayerApp.cpp)
 - [Play a String Source](https://github.com/hiromorozumi/bcplayer/blob/master/stringPlayer.cpp)
 - [SFX Demo](https://github.com/hiromorozumi/bcplayer/blob/master/SFXTest.cpp)
+
+
+Building Your Project with BCPlayer
+-----------------------------------
+
+Bulletpoints of what should happen in your compilation:
+
+    - The **include** folder should have the **BC** folder inside it
+	- Tell the compiler to include your **include** folder
+    - Compile your source along with BCPlayer.cpp
+	- Link against **libsndfile** and **portaudio** libraries, which BCPlayer depends on
+
+So, if you're using MinGW, you can build your project like this:
+
+    g++ BCPlayer.cpp myApp.cpp -I/.include -L/.lib lib/libsndfile-1.lib lib/portaudio_x86.lib -o myApp
