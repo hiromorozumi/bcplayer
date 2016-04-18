@@ -38,7 +38,7 @@ Folder Structure
 I would recommend setting up your project this way:
 
 
-    MyGameProject -----+----- include/ --------- BC/ ---------------- (many .h files)
+    MyGameProject/ ----+----- include/ --------- BC/ ---------------- (many .h files)
                        |         
                        +----- lib/ ---------+--- portaudio_x86.lib       
                        |                    |
@@ -51,7 +51,7 @@ I would recommend setting up your project this way:
 
 The BC folder inside the include folder has all the header files that BCPlayer needs.
 All you have to do to "include" to BCPlayer library is just add the following directive
-at the top your main function.
+at the top of your source where you want to use BCPlayer.
 
     #include "BC/BCPlayer.h"
 
@@ -108,3 +108,11 @@ Bulletpoints of what should happen in your compilation:
 So, if you're using MinGW, you can build your project like this:
 
     g++ BCPlayer.cpp myApp.cpp -I/.include lib/libsndfile-1.lib lib/portaudio_x86.lib -o myApp
+
+	
+Try the Demos
+-------------
+
+(For Windows users...)
+
+After you clone this repository, you can run the demo executables, like SFXTest.exe to quickly see what the library can do. The folder structure is already set up for building your project inside it, also. Have fun! :)
