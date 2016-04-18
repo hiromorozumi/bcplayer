@@ -48,7 +48,8 @@ I would recommend setting up your project this way:
                        |
                        +----- main.cpp
 
-The BC folder inside the include folder has all the header files that BCPlayer needs.
+
+					   The BC folder inside the include folder has all the header files that BCPlayer needs.
 All you have to do to "include" to BCPlayer library is just add the following directive
 at the top your main function.
 
@@ -57,3 +58,35 @@ at the top your main function.
 The single BCPlayer.cpp file is the library. Let it sit next to your main function and
 just compile along with all your source code.					   
 And when you comile, remember to link against the two .lib files in the lib folder.
+
+
+How to Use the Library
+----------------------
+
+Using BCPlayer is pretty easy.
+
+First instantiate a BCPlayer object.
+
+    BCPlayer bcplayer;
+	
+Then, to load music from a BeepComp source text file and play it: 
+
+    bcplayer.loadMusic("mySong.txt");
+	bcplayer.startMusic();
+
+And... you can do other things like changing volume or setting up your music to loop etc.:
+
+    bcplayer.set
+	bcplayer.enableLooping()
+
+You can play sound effects on top your music.
+There are 16 possible slots (0-15). This example load a sound to slot #2 and play it: 
+
+    bcplayer.loadSFX(2, "bang.wav"); // needs to be 16-bit WAV, can be mono or stereo
+    bcplayer.startSFX(2);
+
+These example programs will show you more....:
+
+[Simple Background Music Demo](https://github.com/hiromorozumi/bcplayer/blob/master/BCPlayerApp.cpp)
+[Play a String Source](https://github.com/hiromorozumi/bcplayer/blob/master/stringPlayer.cpp)
+[SFX Demo]()https://github.com/hiromorozumi/bcplayer/blob/master/SFXTest.cpp
