@@ -28,6 +28,7 @@ int main()
 	sourceCPP.push_back("source_cpp/MData.cpp");
 	sourceCPP.push_back("source_cpp/DData.cpp");
 	sourceCPP.push_back("source_cpp/Astro.cpp");
+	sourceCPP.push_back("source_cpp/Fall.cpp");
 	sourceCPP.push_back("source_cpp/LFO.cpp");
 	sourceCPP.push_back("source_cpp/OSC.cpp");
 	sourceCPP.push_back("source_cpp/NOSC.cpp");
@@ -60,11 +61,11 @@ int main()
 	// #include "MML.h" will become #include "BC/MML.h"
 
 	cout << "rewriting the header filenames to BC/---.h ...\n";	
-	string header[10] = {	"\"MData.h", "\"DData.h", "\"Astro.h", "\"LFO.h", "\"OSC.h", "\"OSC.h", "\"NOSC.h",
-						 "\"DelayLine.h", "\"MML.h", "\"MPlayer.h" };
+	string header[11] = {	"\"MData.h", "\"DData.h", "\"Astro.h", "\"LFO.h", "\"OSC.h", "\"OSC.h", "\"NOSC.h",
+						 "\"DelayLine.h", "\"MML.h", "\"MPlayer.h", "\"Fall.h" };
 	
 	// there are 10 target filenames to rewrite
-	for(int i=0; i<10; i++)
+	for(int i=0; i<11; i++)
 	{
 		bool done = false;
 		size_t found;

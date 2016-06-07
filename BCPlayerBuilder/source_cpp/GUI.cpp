@@ -3,6 +3,7 @@
 #include <cstring>
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <SFML/Graphics.hpp>
 #include <SFML/System/String.hpp>
 #include "GUI.h"
@@ -10,12 +11,18 @@
 
 using namespace std;
 
+const std::string GUI::STR_VERSION = "0.2.2";
+
 void GUI::initialize()
 {
+	config.setVersion(STR_VERSION);
+	installDir = config.getCurrentDir();
+	currentPath = installDir;
+	
 	anotherThreadRunning = false;
 
 	// create window
-	windowTitle = "*** BeepComp ***";
+	windowTitle = "BeepComp";
 	window.create(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), windowTitle);
 	adjustedWindowWidth = static_cast<double>(WINDOW_WIDTH);
 	adjustedWindowHeight = static_cast<double>(WINDOW_HEIGHT);
@@ -26,68 +33,89 @@ void GUI::initialize()
 	mouse.bindWindow(&window);
 
 	// load icon
-	icon.loadFromFile("images/beepcomp_icon.png");
+	string iconFilePath = installDir + "\\images\\beepcomp_icon.png";
+	icon.loadFromFile(iconFilePath);
 	window.setIcon(32, 32, icon.getPixelsPtr());
 
 	// load logo
-	if(!logoTexture.loadFromFile("images/beepcomp_logo.png"))
+	string logoFilePath = installDir + "\\images\\beepcomp_logo.png";
+	if(!logoTexture.loadFromFile(logoFilePath))
 		cout << "Logo: load error!\n";
-	logo.setPosition(sf::Vector2f(672,12));
+	logo.setPosition(sf::Vector2f(PANEL_TOP_X-9,12)); // 675
 	logo.setTexture(logoTexture);
 
 	// load font for knob and buttons
-	if (!miniFont.loadFromFile("fonts/uni0563.ttf"))
+	string miniFontFilePath = installDir + "\\fonts\\04B09.ttf";
+	if (!miniFont.loadFromFile(miniFontFilePath))
 		{ cout << "Error reading font for the Knob object..\n"; }
 	
 	// create a knob - and initialize
-	knob.initialize(std::string("Volume"), 56.0f, wPtr, miniFont);
-	knob.setPosition(682.0f, 355.0f);
+	knob.initialize(std::string("MASTER"), 60.0f, wPtr, miniFont);
+	knob.setPosition(PANEL_TOP_X+3.0f, 358.0f);
 	
 	// create buttons with shapes...
 	const float XSPACING = 78;
 	const float YSPACING = 70;
-	playButton.initialize   (0, "PLAY",    680+XSPACING*0, 234+YSPACING*0, 60, 52, wPtr, miniFont);
-	pauseButton.initialize  (0, "PAUSE",   680+XSPACING*1, 234+YSPACING*0, 60, 52, wPtr, miniFont);
-	rewindButton.initialize (0, "REWIND",  680+XSPACING*0, 234+YSPACING*1, 60, 20, wPtr, miniFont);	
-	forwardButton.initialize(0, "FORWARD", 680+XSPACING*1, 234+YSPACING*1, 60, 20, wPtr, miniFont);
+	playButton.initialize   (0, "PLAY",    PANEL_TOP_X+XSPACING*0, 236+YSPACING*0, 60, 52, wPtr, miniFont);
+	pauseButton.initialize  (0, "PAUSE",   PANEL_TOP_X+XSPACING*1, 236+YSPACING*0, 60, 52, wPtr, miniFont);
+	rewindButton.initialize (0, "REWIND",  PANEL_TOP_X+XSPACING*0, 236+YSPACING*1, 60, 20, wPtr, miniFont);	
+	forwardButton.initialize(0, "FORWARD", PANEL_TOP_X+XSPACING*1, 236+YSPACING*1, 60, 20, wPtr, miniFont);
 
 	// create smaller text buttons...
 	const float MINITBSPACING = 42;
-	keyButton.initialize(1, "KEY", 768, 342 + MINITBSPACING * 0, 48, 26, wPtr, miniFont);
-	docButton.initialize(1, "DOC", 768, 342 + MINITBSPACING * 1, 48, 26, wPtr, miniFont);
-	dlyButton.initialize(1, "DLY", 768, 342 + MINITBSPACING * 2, 48, 26, wPtr, miniFont);
+	keyButton.initialize(1, "KEY", PANEL_TOP_X+88, 344 + MINITBSPACING * 0, 48, 26, wPtr, miniFont);
+	docButton.initialize(1, "DOC", PANEL_TOP_X+88, 344 + MINITBSPACING * 1, 48, 26, wPtr, miniFont);
+	dlyButton.initialize(1, "DLY", PANEL_TOP_X+88, 344 + MINITBSPACING * 2, 48, 26, wPtr, miniFont);
 	
 	// create bigger text buttons...
 	const float TXBSPACING = 42;
-	newButton.initialize   (1, "NEW",    680, 470 + TXBSPACING * 0, 136, 26, wPtr, miniFont);
-	loadButton.initialize  (1, "LOAD",   680, 470 + TXBSPACING * 1, 136, 26, wPtr, miniFont);
-	saveButton.initialize  (1, "SAVE",   680, 470 + TXBSPACING * 2, 136, 26, wPtr, miniFont);
-	exportButton.initialize(1, "EXPORT", 680, 470 + TXBSPACING * 3, 136, 26, wPtr, miniFont);
+	newButton.initialize   (1, "NEW",    PANEL_TOP_X, 472 + TXBSPACING * 0, 136, 26, wPtr, miniFont);
+	loadButton.initialize  (1, "LOAD",   PANEL_TOP_X, 472 + TXBSPACING * 1, 136, 26, wPtr, miniFont);
+	saveButton.initialize  (1, "SAVE",   PANEL_TOP_X, 472 + TXBSPACING * 2, 136, 26, wPtr, miniFont);
+	exportButton.initialize(1, "EXPORT", PANEL_TOP_X, 472 + TXBSPACING * 3, 136, 26, wPtr, miniFont);
 	
 	// set default userdata path
-	defaultPath = "userdata/";
+	// defaultPath = "userdata/"; // DEPRECIATED
+	
+	// call Config class's setup - if config file's not found in current directory (fresh after installation)
+	// it will copy the entire 'userdata' folder and its contents
+	
+	string configSetupResult = config.setup();  			// COMMENT OUT THIS LINE FOR *** PORTABLE ***
+	cout << "From GUI.cpp: " << configSetupResult << endl; 	// COMMENT OUT THIS LINE FOR *** PORTABLE ***
+	defaultPath = config.getUserdataPath(); 				// COMMENT OUT THIS LINE FOR *** PORTABLE ***
+	
+	// defaultPath = installDir + "\\userdata";	// DECOMMNENT THIS LINE FOR *** PORTABLE ***
+	
+	if(defaultPath.empty()||defaultPath=="#") // safeguarding...
+		defaultPath = installDir + "\\userdata";
+	
+	dialog.setDefaultDir(defaultPath); // don't forget to set default for Dialog!
+	
+	// set this to currently working path
 	currentPathAndFileName = defaultPath;
+	currentPath = defaultPath;
 
 	// load work area font
-	string fontfile = "fonts/EnvyCodeR.ttf";
-	if (!font.loadFromFile(fontfile))
+	string mainFontFilePath = installDir + "\\fonts\\UbuntuMono-R.ttf";
+	if (!font.loadFromFile(mainFontFilePath))
 		{ cout << "Loading main font - error!" << endl; }
 
-	charHeight = font.getLineSpacing(24);
+	charHeight = font.getLineSpacing(25) * 1.032f;
 	charWidth = 13;
 
 	// set up text objects array for edit area
 	for(int i=0; i<TEXT_HEIGHT; i++)
 	{
  		text[i].setFont(font); // font is a sf::Font
-		text[i].setCharacterSize(24); // in pixels, not points!
-		text[i].setColor(sf::Color::Green);
+		text[i].setCharacterSize(25); // in pixels, not points!
+		//text[i].setColor(sf::Color::Green);
+		text[i].setColor(sf::Color(90,255,90));
 		text[i].setPosition(TEXT_TOP_X, i * charHeight + TEXT_TOP_Y - 4);
 	}
 
 	// set up a cursor
 	cursor.setFillColor(sf::Color(255, 225, 225, 128));
-	cursor.setSize(sf::Vector2f(14, 24));
+	cursor.setSize(sf::Vector2f(14, 26));
 
 	// set up the selector mask rectangles (one for each line)
 	for(int i=0; i< TEXT_HEIGHT; i++)
@@ -97,7 +125,7 @@ void GUI::initialize()
 		highlighter[i].setPosition(0,0);
 	}
 
-	source = "// MML source not set yet... //" + CH_EOF;
+	source = std::string("// MML source not set yet... //") + CH_EOF;
 
 	// reset text display variables
 	cursorX = 0;
@@ -128,9 +156,18 @@ void GUI::initialize()
 	// load up default music to start...
 	mplayer.pause();
 	mplayer.resetForNewSong();
-	source = mml.loadFile("default.txt", &mplayer);
-	if(source=="Error")
+	string defaultSourceFile = installDir + "\\default.txt";
+	source = mml.loadFile(defaultSourceFile, &mplayer);
+	if(source.empty() || (source.length()>=5 && source.find("Load error")!=string::npos))
+	{
 		cout << "File load error..." << endl;
+		source  = "// *****  Welcome to BeepComp!  *****\n//\n";
+		source += "// Please press \n//\n//   ... [F10] to load a new song or\n//   ... [F9] to start composing new :)";
+		string strEOF = "\xFF";
+		source += strEOF;
+		mml.setSource(source);
+	}
+	mml.setSource(source);
 	mml.parse(&mplayer);
 	mplayer.goToBeginning();
 
@@ -168,14 +205,14 @@ void GUI::initialize()
 	mouseWheelMoved = 0;
 
 	// meter related
-	meter.initialize(685, 94, 138, 92, 0.5f); // set size and position
+	meter.initialize(PANEL_TOP_X+5, 90, 138, 98, 0.5f); // set size and position
 
 	for(int i=0; i<10; i++)
 		meter.set(i, 0.0f);
 	
 	// meter back panel
-	backPanel.setSize(sf::Vector2f(138, 96));
-	backPanel.setPosition(sf::Vector2f(680, 90));
+	backPanel.setSize(sf::Vector2f(138, 98));
+	backPanel.setPosition(sf::Vector2f(PANEL_TOP_X, 90));
 	backPanel.setFillColor(sf::Color(40,40,40));
 	backPanel.setOutlineThickness(2.0f);
 	backPanel.setOutlineColor(sf::Color(80,80,80));
@@ -200,44 +237,55 @@ void GUI::initialize()
 	help.set(10, "F10", loadButton.x, loadButton.y - yup);
 	help.set(11, "F11", saveButton.x, saveButton.y - yup);
 	help.set(12, "F12", exportButton.x, exportButton.y - yup);
-	help.set(13, "CTRL-UP   ", 640, 346);
-	help.set(14, "CTRL-DOWN", 640, 360);
-	float helpXTab = 150.0;
-	help.set(15, "ESC",        6           ,  6 );
-	help.set(16, ".... QUIT",  6 + helpXTab,  6 );
-	help.set(17, "CTRL + Z",   6           ,  6 + helpYSpacing*1);
-	help.set(18, ".... UNDO",  6 + helpXTab,  6 + helpYSpacing*1);
-	help.set(19, "CTRL + C",   6           ,  6 + helpYSpacing*2);
-	help.set(20, ".... COPY",  6 + helpXTab,  6 + helpYSpacing*2);
-	help.set(21, "CTRL + V",   6           ,  6 + helpYSpacing*3);
-	help.set(22, ".... PASTE", 6 + helpXTab,  6 + helpYSpacing*3);
-	help.set(23, "CTRL + S",   6           ,  6 + helpYSpacing*4);
-	help.set(24, ".... SAVE",  6 + helpXTab,  6 + helpYSpacing*4);
-	help.set(25, "ALT + S",    6           ,  6 + helpYSpacing*5);
-	help.set(26, ".... QUICK-SAVE" ,  6 + helpXTab,  6 + helpYSpacing*5);
-	help.set(27, "CTRL + A",   6           ,  6 + helpYSpacing*6);
-	help.set(28, ".... SELECT ALL" ,  6 + helpXTab,  6 + helpYSpacing*6);	
-	help.set(29, "SHIFT + ARROW"   ,  6           ,  6 + helpYSpacing*7);
-	help.set(30, ".... SELECT TEXT",  6 + helpXTab,  6 + helpYSpacing*7);
-	help.set(31, "ALT"   ,     6           ,  6 + helpYSpacing*8);
-	help.set(32, ".... CLEAR SELECTION",  6 + helpXTab,  6 + helpYSpacing*8);
-	help.set(33, "ALT + V",    6           ,  6 + helpYSpacing*9);
-	help.set(34, ".... SYSTEM VOLUME" ,  6 + helpXTab,  6 + helpYSpacing*9);
-	help.set(35, "ALT + D",    6           ,  6 + helpYSpacing*10);
-	help.set(36, ".... AUDIO DEVICE" ,  6 + helpXTab,  6 + helpYSpacing*10);
-	help.set(37, "ALT + I",    6           ,  6 + helpYSpacing*11);
-	help.set(38, ".... INITIALIZE AUDIO" ,  6 + helpXTab,  6 + helpYSpacing*11);
-	help.set(39, "HOME"            ,  6,             6 + helpYSpacing*12);
-	help.set(40, ".... TO TOP"     ,  6 + helpXTab,  6 + helpYSpacing*12);
-	help.set(41, "END"             ,  6,             6 + helpYSpacing*13);
-	help.set(42, ".... TO END"     ,  6 + helpXTab,  6 + helpYSpacing*13);
+	help.set(13, "CTRL+UP   ", PANEL_TOP_X-44, 346);
+	help.set(14, "CTRL+DOWN", PANEL_TOP_X-44, 360);
+	float helpXTab = 156.0;
+	help.set(15, "ESC",       	12           ,  8 );
+	help.set(16, "....  QUIT",	12 + helpXTab,  8 );
+	help.set(17, "CTRL + Z",   	12           ,  8 + helpYSpacing*1);
+	help.set(18, "....  UNDO",  12 + helpXTab,  8 + helpYSpacing*1);
+	help.set(19, "CTRL + C",   	12           ,  8 + helpYSpacing*2);
+	help.set(20, "....  COPY",  12 + helpXTab,  8 + helpYSpacing*2);
+	help.set(21, "CTRL + V",   	12           ,  8 + helpYSpacing*3);
+	help.set(22, "....  PASTE", 12 + helpXTab,  8 + helpYSpacing*3);
+	help.set(23, "CTRL + S",   	12           ,  8 + helpYSpacing*4);
+	help.set(24, "....  SAVE",  12 + helpXTab,  8 + helpYSpacing*4);
+	help.set(25, "ALT + S",    	12           ,  8 + helpYSpacing*5);
+	help.set(26, "....  QUICK-SAVE" ,	12 + helpXTab,  8 + helpYSpacing*5);
+	help.set(27, "CTRL + A",   	12     	  ,  8 + helpYSpacing*6);
+	help.set(28, "....  SELECT ALL" ,	12 + helpXTab,  8 + helpYSpacing*6);	
+	help.set(29, "SHIFT + ARROW"   ,	12           ,  8 + helpYSpacing*7);
+	help.set(30, "....  SELECT TEXT",	12 + helpXTab,  8 + helpYSpacing*7);
+	help.set(31, "ALT"   ,     12           ,  8 + helpYSpacing*8);
+	help.set(32, "....  CLEAR SELECTION",  12 + helpXTab,  8 + helpYSpacing*8);
+	help.set(33, "ALT + V",    12           ,  8 + helpYSpacing*9);
+	help.set(34, "....  SYSTEM VOLUME" ,  12 + helpXTab,  8 + helpYSpacing*9);
+	help.set(35, "ALT + D",    12           ,  8 + helpYSpacing*10);
+	help.set(36, "....  AUDIO DEVICE" ,  12 + helpXTab,  8 + helpYSpacing*10);
+	help.set(37, "ALT + I",    12           ,  8 + helpYSpacing*11);
+	help.set(38, "....  INITIALIZE AUDIO" ,  12 + helpXTab,  8 + helpYSpacing*11);
+	help.set(39, "ALT + O",    12           ,  8 + helpYSpacing*12);
+	help.set(40, "....  OPEN USERDIR" ,  12 + helpXTab,  8 + helpYSpacing*12);
+	help.set(41, "HOME"            ,  12,             8 + helpYSpacing*13);
+	help.set(42, "....  TO TOP"     ,  12 + helpXTab,  8 + helpYSpacing*13);
+	help.set(43, "END"             ,  12,             8 + helpYSpacing*14);
+	help.set(44, "....  TO END"     ,  12 + helpXTab,  8 + helpYSpacing*14);
+	help.set(45, "PGUP"             ,  12,             8 + helpYSpacing*15);
+	help.set(46, "....  UP ONE SCREEN"     ,  12 + helpXTab,  8 + helpYSpacing*15);
+	help.set(47, "PGDOWN"             ,  12,             8 + helpYSpacing*16);
+	help.set(48, "....  DOWN ONE SCREEN"     ,  12 + helpXTab,  8 + helpYSpacing*16);
 	
-	help.setBlackOut(3, 3, 360, helpYSpacing*14+10);	
+	help.setBlackOut(0, 0, 390, helpYSpacing*17+20);	
 	help.deactivate(); // start inactive...
 	
-	//
-	//
-	//
+	string vText = "VERSION " + STR_VERSION;
+	string authorText = "by Hiro Morozumi"; // if you mod this program, you can express yourself here, hehe :)
+	help.setVersionText(vText, authorText);
+	help.deactivateVersionText();
+	
+	// this adds a little animation.. just some silly fun :)
+	omake.setCurrentDir(installDir);
+	omake.initialize(&window);
 	
 	// clock to track meter update interval
 	meterClock.restart();
@@ -247,7 +295,8 @@ void GUI::initialize()
 	
 	// dialog - bind window in this class
 	dialog.bindWindow(&window);
-	string startFolder = dialog.getCurrentDir() + "\\userdata";
+	string startFolder = defaultPath;
+	// startFolder = dialog.getCurrentDir() + "\\userdata"; // DECOMMENT THIS LINE FOR *** PORTABLE ***
 	dialog.setStartFolder(startFolder);	
 
 	// clock to track blinking
@@ -256,12 +305,11 @@ void GUI::initialize()
 	
 	// clock for auto-saving (every 5 min.)
 	autoSaveClock.restart();
+	
+	// clock for checking portaudio.. (every second)
 
 	window.requestFocus();
 	
-	// DEBUG
-	cout << "At start - progressRatio() = " << mplayer.getProgressRatio() << endl;
-
 	// start running GUI
 	// run();
 }
@@ -345,9 +393,14 @@ void GUI::run()
 				adjustedWindowHeight = static_cast<double>(event.size.height) ;
 			}
         }
+		
+		// mouse! this might just be a better way to get coordinates
+		mouseX = static_cast<double>(sf::Mouse::getPosition().x - window.getPosition().x -4)  * WINDOW_WIDTH / adjustedWindowWidth;
+		mouseY = static_cast<double>(sf::Mouse::getPosition().y - window.getPosition().y - 23)  * WINDOW_HEIGHT / adjustedWindowHeight;
 
 		handleInputs();
 		handleTimedSaving();
+		handleAudioChecking();
 		updateDisplay();
 
 		// check for termination request
@@ -850,9 +903,13 @@ void GUI::handleInputs()
 		forwardButton.activate();
 		while(kbd.f4() || mouse.left())
 		{ updateDisplay(); }
-	
+
 		if(mplayer.isPlaying())
 		{
+			
+			cout << "getNextSeekPoint()=" << mplayer.getNextSeekPoint() << endl;
+			cout << "getSongLastFramePure()=" << mplayer.getSongLastFramePure() << endl;
+			
 			// forward to the next seek position relative to current framePos
 			long forwardTo = mplayer.getNextSeekPoint();
 			mplayer.pause();
@@ -864,18 +921,7 @@ void GUI::handleInputs()
 		forwardButton.highlight();
 	else
 		forwardButton.unhighlight();
-	
-	/*
-	if(kbd.f5())
-	{
-		int type = mplayer.getTableType();
-		type++;
-		if(type==2)
-			type = 0;
-		mplayer.setTableType(type);
-		while(kbd.f5()){}
-	}
-	*/
+
 	
 	// KEYs help button or F5 key
 	if( kbd.f5() || (mouse.left() && keyButton.hovering(mouseX, mouseY)) )
@@ -932,24 +978,28 @@ void GUI::handleInputs()
 		cout << "After doubling backslashes and replacing with env variable:\n" << docPath << endl;
 		
 		// WAIT... try a relative path
-		docPath = "documentation\beepcomp_users_guide.html";
-		string docPath2 = "documentation\\beepcomp_users_guide.html";
+		docPath = "documentation\\beepcomp_users_guide.html";
+		string docPath2 = installDir + "\\documentation\\beepcomp_users_guide.html";
 		
 		// now try to open the html file...
+		/*
 		int result = 0;
 		TCHAR app[MAX_PATH] = { 0 };
 		
-		result = (int)::FindExecutable(docPath.c_str(), NULL, app);
+		result = (int)::FindExecutable(docPath2.c_str(), NULL, app);
 		if (result > 32) 
 		{
 			::ShellExecute(0, NULL, app,
-				(docPath).c_str(), NULL, SW_SHOWNORMAL);
+				(docPath2).c_str(), NULL, SW_SHOWNORMAL);
 		}
+		*/
 		
-		ShellExecute( NULL, "open", docPath.c_str(), NULL, NULL, SW_SHOWNORMAL );
-		ShellExecute( NULL, "open", docPath2.c_str(), NULL, NULL, SW_SHOWNORMAL );
-		ShellExecute( NULL, NULL, docPath.c_str(), NULL, NULL, SW_SHOWNORMAL );
-		ShellExecute( NULL, "call", docPath.c_str(), NULL, NULL, SW_SHOWNORMAL );	
+		// ShellExecute( NULL, "open", docPath.c_str(), NULL, NULL, SW_SHOWNORMAL );
+		// ShellExecute( NULL, "open", docPath2.c_str(), NULL, NULL, SW_SHOWNORMAL );
+		
+		ShellExecute( NULL, NULL, docPath2.c_str(), NULL, NULL, SW_SHOWNORMAL );
+		
+		// ShellExecute( NULL, "call", docPath.c_str(), NULL, NULL, SW_SHOWNORMAL );	
 	}
 	else if(docButton.hovering(mouseX, mouseY))
 		docButton.highlight();
@@ -985,6 +1035,7 @@ void GUI::handleInputs()
 		cout << "getLineNumber(charPos) = " << getLineNumber(charPos) << endl;
 		cout << "getStartPosInLine(getLineNumber(charPos)) = " << getStartPosInLine(getLineNumber(charPos)) << endl;
 		cout << "mouse -> " << mouseX << ", " << mouseY << endl;
+		cout << "sf:: Mouse.x(), .y() -> " << static_cast<double>(sf::Mouse::getPosition().x - window.getPosition().x -4)  * WINDOW_WIDTH / adjustedWindowWidth << ", " << static_cast<double>(sf::Mouse::getPosition().y - window.getPosition().y - 23)  * WINDOW_HEIGHT / adjustedWindowHeight << endl;
 		cout << "current cx & cy -> " << cx << ", " << cy << endl;
 		
 		// DEBUG
@@ -1002,6 +1053,8 @@ void GUI::handleInputs()
 		startNewDialog();
 		adjustWindowSize();
 		progress.update(0.0f);
+		mouseLPressed = false; // DEBUG - clear flag
+		emptySelection(); // DEBUG - clean up
 	}
 	else if(newButton.hovering(mouseX, mouseY))
 		newButton.highlight();
@@ -1017,6 +1070,8 @@ void GUI::handleInputs()
 		loadDialog();
 		adjustWindowSize();
 		progress.update(0.0f);
+		mouseLPressed = false; // DEBUG - clear flag
+		emptySelection(); // DEBUG - clean up
 	}
 	else if(loadButton.hovering(mouseX, mouseY))
 		loadButton.highlight();
@@ -1033,6 +1088,8 @@ void GUI::handleInputs()
 		
 		saveDialog();
 		adjustWindowSize();
+		mouseLPressed = false; // DEBUG - clear flag
+		emptySelection(); // DEBUG - clean up
 	}
 	else if(saveButton.hovering(mouseX, mouseY))
 		saveButton.highlight();
@@ -1058,7 +1115,21 @@ void GUI::handleInputs()
 		{
 			quickSave();
 			// set up a quick message (turns off automatically after a few seconds)
-			help.setQuickMessage("Quick-saved!");
+			help.setQuickMessage("QUICK-SAVED!");
+		}
+	}
+	
+	// TRY to... open the 'userdata' folder when pressed ALT + O
+	if( kbd.altO() )
+	{
+		if( ( kbd.altO() ) )
+		{
+			while( kbd.altO() )
+			{ updateDisplay(); }; // update display
+		
+			ShellExecute( NULL, "open", defaultPath.c_str(), NULL, NULL, SW_SHOWNORMAL );
+			ShellExecute( NULL, NULL, defaultPath.c_str(), NULL, NULL, SW_SHOWNORMAL );
+			ShellExecute( NULL, "call", defaultPath.c_str(), NULL, NULL, SW_SHOWNORMAL );
 		}
 	}
 	
@@ -1101,10 +1172,20 @@ void GUI::handleInputs()
 		while(kbd.altI())
 		{ updateDisplay(); }
 	
+		help.setQuickMessage("RESETTING AUDIO...");
+		bool playerWasPlaying = mplayer.isPlaying();
+		long seekTo = mplayer.getFramePos(); // will clean seek again to current position
 		mplayer.pause();
 		mplayer.close();
 		cout << "Reinitializing portaudio...\n";
 		mplayer.initialize();
+		mplayer.resetForNewSong();
+		mml.parse(&mplayer);
+		mplayer.goToBeginning();
+		if(playerWasPlaying)
+			mplayer.seekAndStart(seekTo);
+		else
+			mplayer.seek(seekTo);
 	}
 	
 	// open up system audio device control
@@ -1117,6 +1198,24 @@ void GUI::handleInputs()
 		ShellExecute( NULL, NULL, exeCommand.c_str(), NULL, NULL, SW_SHOWNORMAL );
 		cout << "Open - audio device properties\n";
 	}
+	
+	//
+	//	DEBUG! - test automatic restart of portaudio stream...
+	//  (this forces stream to STOP)
+	if(kbd.altZ() && kbd.ctrl())
+	{
+		while(kbd.altZ() &&kbd.ctrl())
+		{ updateDisplay(); }
+		mplayer.stopStream();
+		cout << "DEBUG - stopping audio stream for testing purposes....\n";
+		cout << "portaudio state: " << mplayer.getStreamState() << endl;
+	}
+	
+	// DEBUG - just to get portaudio stream state...
+	if(kbd.altX())
+	{
+		cout << "portaudio state: " << mplayer.getStreamState() << endl;
+	}
 
 	// EXPORT button or F12
 	if(kbd.f12() || (mouse.left() && exportButton.hovering(mouseX, mouseY)))
@@ -1128,6 +1227,8 @@ void GUI::handleInputs()
 		exportDialog();
 		adjustWindowSize();
 		progress.update(0.0f);
+		mouseLPressed = false; // DEBUG - clear flag
+		emptySelection(); // DEBUG - clean up
 	}
 	else if(exportButton.hovering(mouseX, mouseY))
 		exportButton.highlight();
@@ -1235,9 +1336,51 @@ endOfButtonRoutines:
 	{
 		while(kbd.ctrlV()){}
 		cout << "CTRL-V!" << endl;
-
+		
+		// DEBUG - if you want to restore to original, just use following two lines
+		//
 		// if anything is highlighted, clear
-		emptySelection();
+		// emptySelection();
+		//
+		//
+		//
+		//
+		
+		int charPosToStore = charPos; // we'll store this to undo history as original charPos
+		int performedAtToStore = charPos;
+		string strToErase = "";
+		
+		// if anything is highlighted, erase that first
+		if(selectFinished && source.length()>1)
+		{
+			cout << "CTRL + V: erase selection first - from " << selectStart << " to " << selectEnd << endl;
+			
+			int eraseFrom = selectStart;
+			int eraseTo = selectEnd;
+			if(eraseTo < eraseFrom) // if selected upwards, swap
+			{
+				int temp = eraseTo;
+				eraseTo = eraseFrom;
+				eraseFrom = temp;
+			}
+			if(eraseTo >= (source.length()-1)) // if EOF is selected, back up by one
+				eraseTo = source.length()-2;
+			int nCharsToErase = (eraseTo - eraseFrom) + 1;
+			int newCharPos = eraseFrom;
+			strToErase = source.substr(eraseFrom, nCharsToErase); // erase this before pasting
+			
+			// now amend the source string
+			source.erase(eraseFrom, nCharsToErase);
+			performedAtToStore = eraseFrom; // storing record for undo
+			emptySelection(); // take out highlighter..
+			charPos = newCharPos; // adjust charPos
+		}
+		
+		//
+		//
+		//
+		//
+		//
 
 		// get content of clipboard and paste into str
 		string strToPaste = getClipBd();
@@ -1266,7 +1409,7 @@ endOfButtonRoutines:
 		}
 
 		// store this action in history (undo history stack)
-		addHistory("", strToPaste, charPos, charPos, topRenderLine);
+		addHistory(strToErase, strToPaste, performedAtToStore, charPosToStore, topRenderLine);
 
 		// DEBUG!!!
 		cout << "Just about to insert for CTRL-V..\n";
@@ -1306,8 +1449,11 @@ endOfButtonRoutines:
 		if(selecting) // only when selecting - out-of-bound selecting allows for scrolling for cy
 		{
 			// update pointed char coordinates
-			cx = (mouseX - TEXT_TOP_X) / static_cast<double>(charWidth);
-			cy = (mouseY - TEXT_TOP_Y) / static_cast<double>(charHeight);
+			if(mouseX < 674.0)
+			{
+				cx = (mouseX - TEXT_TOP_X) / static_cast<double>(charWidth);
+				cy = (mouseY - TEXT_TOP_Y) / static_cast<double>(charHeight);
+			}
 			
 			// safeguarding for negative x values
 			if(cx < 0) cx = 0;
@@ -1345,7 +1491,6 @@ endOfButtonRoutines:
 		selectFinished = false;
 	}
 	
-
 	if(kbd.home())
 	{
 		while(kbd.home()){}
@@ -1362,16 +1507,67 @@ endOfButtonRoutines:
 		setStrView(); // update the whole text line info..
 		updateCursorPos();	// re-update... topRenderLine etc.
 	}
+	if(kbd.pageDown())
+	{
+		while(kbd.pageDown()){}
+		int screenY = currentLine - topRenderLine; // remember distance on Y axis from top
+		posInLine = 0;
+		currentLine += TEXT_HEIGHT;
+		currentLine = min(currentLine, nLines-1);
+		topRenderLine = currentLine - screenY;
+		if(topRenderLine > currentLine) topRenderLine = currentLine;
+		calculateCharPos();
+		updateScreenCoordinates();
+		setStrView(); // update the whole text line info..
+		updateCursorPos();	// re-update... topRenderLine etc.
+		emptySelection();
+	}
+	if(kbd.pageUp())
+	{
+		while(kbd.pageUp()){}
+		int screenY = currentLine - topRenderLine; // remember distance on Y axis from top
+		posInLine = 0;
+		currentLine -= TEXT_HEIGHT;
+		currentLine = max(currentLine, 0);
+		topRenderLine = currentLine - screenY;
+		if(topRenderLine < 0) topRenderLine = 0;
+		calculateCharPos();
+		updateScreenCoordinates();
+		setStrView(); // update the whole text line info..
+		updateCursorPos();	// re-update... topRenderLine etc.
+		emptySelection();
+	}
 	// shift or mouse drag -> select snipet
 	// (exlude shift-typing case!)
 	if( kbd.shift() || mouseLPressed)
 	{
 		if(!selecting && typedWithShift==false) // shift-down (mouseL-Down) has just now begun
 		{
+			// update pointed char coordinates
+			if(mouseX<674.0)
+			{
+				cx = (mouseX - TEXT_TOP_X) / static_cast<double>(charWidth);
+				cy = (mouseY - TEXT_TOP_Y) / static_cast<double>(charHeight);
+			}
+			int lastScreenY = (nLines-1) - topRenderLine; // Y of last line shown on screen
+		
 			// exclude case where mouse pressed but out of text edit area
-			if(mouseLPressed && mouseX > 674.0)
+			if(mouseLPressed && (mouseX > 674.0 || mouseX < 0.0))
 			{
 				cout << "Clicked, but out of text area!\n";
+				emptySelection();
+			}
+			// exclude case where clicked x is past posInLine
+			else if(mouseLPressed && (posInLine < cx))
+			{
+				cout << "clicked, but cx is past posInLine!\n";
+				emptySelection();
+			}
+			// exclude case where clicked y is past lastScreenY
+			else if(mouseLPressed && (lastScreenY < cy))
+			{
+				cout << "clicked, but cy is past lastScreenY!\n";
+				emptySelection();
 			}
 			// if dragging the volume knob, won't start selection
 			else if(mouseLPressed && knob.isActive())
@@ -1380,10 +1576,6 @@ endOfButtonRoutines:
 			}
 			else
 			{
-				// update pointed char coordinates
-				cx = (mouseX - TEXT_TOP_X) / static_cast<double>(charWidth);
-				cy = (mouseY - TEXT_TOP_Y) / static_cast<double>(charHeight);				
-				
 				selectStart = charPos;
 				selectEnd = charPos;
 				selectStartLine = getLineNumber(selectStart);
@@ -1399,9 +1591,11 @@ endOfButtonRoutines:
 		if(selecting && typedWithShift==false)
 		{
 			// update pointed char coordinates
-			cx = (mouseX - TEXT_TOP_X) / static_cast<double>(charWidth);
-			cy = (mouseY - TEXT_TOP_Y) / static_cast<double>(charHeight);			
-			
+			if(mouseX < 674.0)
+			{
+				cx = (mouseX - TEXT_TOP_X) / static_cast<double>(charWidth);
+				cy = (mouseY - TEXT_TOP_Y) / static_cast<double>(charHeight);			
+			}
 			if(charPos != selectEnd)
 			{
 				selectEnd = charPos;
@@ -1416,9 +1610,12 @@ endOfButtonRoutines:
 		if(selecting)
 		{
 			// update pointed char coordinates
-			cx = (mouseX - TEXT_TOP_X) / static_cast<double>(charWidth);
-			cy = (mouseY - TEXT_TOP_Y) / static_cast<double>(charHeight);
-
+			if(mouseX < 674.0)
+			{
+				cx = (mouseX - TEXT_TOP_X) / static_cast<double>(charWidth);
+				cy = (mouseY - TEXT_TOP_Y) / static_cast<double>(charHeight);
+			}
+			
 			// EXPERIMENT - safeguarding for negative x, y values
 			if(cx < 0) cx = 0;
 			if(cy < 0) cy = 0;
@@ -1446,12 +1643,26 @@ endOfButtonRoutines:
 		typedWithShift = false;
 	}
 
+	// if alt is pressed, empty selection
 	if(kbd.alt() || mouseRPressed)
 	{
 		if(selecting || selectFinished)
 		{
 			emptySelection();
 		}
+	}
+	
+	// if clicked on logo, show version info x = 672 to 827, y = 12 to 73, logo is 155 x 61
+	if(mouseLPressed && (672<mouseX) && (mouseX<827) && (12<mouseY) && (mouseY<73))
+	{
+		help.activateVersionText();
+		if(mplayer.isPlaying())
+			omake.activate();
+	}
+	else
+	{
+		help.deactivateVersionText();
+		omake.deactivate();
 	}
 }
 
@@ -1493,7 +1704,7 @@ void GUI::updateDisplay()
 	// if exiting app... skip display updating
 	if(exitApp)
 		return;
-
+	
 	blinkCursor();
 	updatePanel();	
 	
@@ -1515,7 +1726,7 @@ void GUI::updateDisplay()
 	}
 	
 	// update objects on display
-
+	
 	// cursor.. toggle according to blink state
 	if(blinkState==0)
 	{
@@ -1528,8 +1739,14 @@ void GUI::updateDisplay()
 		cursor.setPosition(cursorX * charWidth + TEXT_TOP_X, cursorY * charHeight + TEXT_TOP_Y + 12);
 	}
 
+	/////////////////////////////////////////////////////////////////////
+	
 	// display all elements on screen
 	window.clear();
+	
+	// start with omake stars + fighter.. if active (when version info is showing)
+	if(omake.isActive())
+		omake.draw();
 
 	// draw text objects..
 	for(int i=0; i<TEXT_HEIGHT; i++)
@@ -1590,6 +1807,10 @@ void GUI::updateDisplay()
 	// if quickMessage is on, display...
 	if(help.quickMessageActive)
 		help.drawQuickMessage();
+	
+	// if version text is on, display
+	if(help.versionTextIsActive())
+		help.drawVersionText();
 
 	// now show the updated screen!
 	window.display();
@@ -1765,6 +1986,7 @@ void GUI::startNewDialog()
 		source.append<int>(1,0xFF);
 		mplayer.resetForNewSong();
 		mml.setSource(source);
+		mplayer.setMasterGain(0.7f); // just as a courtesy...	
 		mml.parse(&mplayer);
 		renewForNewSong();
 		mplayer.goToBeginning(); // empty source... but this helps completely initialize
@@ -1777,6 +1999,8 @@ void GUI::startNewDialog()
 		cout << "Start new!\n";
 		cout << "Now current path and filename is\n" << currentPathAndFileName << "\n";
 
+		lastSavedPathAndFileName = ""; // we just started a new song to work on! - clear quick-saving
+		
 		// set the window title
 		window.setTitle(windowTitle);
 		autoSaveClock.restart();
@@ -1786,11 +2010,12 @@ void GUI::startNewDialog()
 	if(currentFileName.empty())
 		window.setTitle(windowTitle);
 	else
-		window.setTitle(windowTitle + " ... " + currentFileName);
+		window.setTitle(currentFileName + " ... " + windowTitle);
 }
 
 void GUI::saveDialog()
 {
+	dialog.setStartFolder(currentPath);
 	string saveFileName = dialog.getSaveFileName();
 	cout << "Save dialog completed!" << endl;
 	bool shouldCancel = dialog.cancelChosen;
@@ -1800,6 +2025,8 @@ void GUI::saveDialog()
 	{
 		currentPathAndFileName = saveFileName;
 		size_t fpos = currentPathAndFileName.find_last_of("\\");
+		currentPath = currentPathAndFileName.substr(0,fpos);
+		cout << "Current Path reset to: " << currentPath;
 		currentFileName = currentPathAndFileName.substr(fpos+1);
 
 		// if the file name has no extension, add '.txt'
@@ -1829,11 +2056,12 @@ void GUI::saveDialog()
 	if(currentFileName.empty())
 		window.setTitle(windowTitle);
 	else
-		window.setTitle(windowTitle + " ... " + currentFileName);
+		window.setTitle(currentFileName + " ... " + windowTitle);
 }
 
 void GUI::loadDialog()
 {	
+	dialog.setStartFolder(currentPath);
 	string loadFileName = dialog.getLoadFileName();
 	cout << "Load dialog completed!" << endl;
 	bool shouldCancel = dialog.cancelChosen;
@@ -1843,15 +2071,20 @@ void GUI::loadDialog()
 	{
 		currentPathAndFileName = loadFileName;
 		size_t fpos = currentPathAndFileName.find_last_of("\\");
+		currentPath = currentPathAndFileName.substr(0,fpos);
+		cout << "Current Path reset to: " << currentPath << endl;
 		currentFileName = currentPathAndFileName.substr(fpos+1);
 
 		cout << "Open: " << currentPathAndFileName << endl;
 		mplayer.pause();
+		mplayer.setMasterGain(0.7f); // in case new file doesn't specify master volume
 		mplayer.resetForNewSong();
 		source = mml.loadFile(currentPathAndFileName, &mplayer); // must pass a c++ string
 		mml.parse(&mplayer);
 		mplayer.goToBeginning();
 		renewForNewSong();
+		
+		lastSavedPathAndFileName = ""; // we just loaded a new song to work on! - clear quick saving
 		
 		// set the window title
 		window.setTitle(windowTitle + " ... " + currentFileName);
@@ -1862,7 +2095,7 @@ void GUI::loadDialog()
 	if(currentFileName.empty())
 		window.setTitle(windowTitle);
 	else
-		window.setTitle(windowTitle + " ... " + currentFileName);
+		window.setTitle(currentFileName + " ... " + windowTitle);
 }
 
 void GUI::exportDialog()
@@ -1908,7 +2141,7 @@ void GUI::exportDialog()
 	if(currentFileName.empty())
 		window.setTitle(windowTitle);
 	else
-		window.setTitle(windowTitle + " ... " + currentFileName);
+		window.setTitle(currentFileName + " ... " + windowTitle);
 }
 
 // this function creates a dialog box for starting new file - start new if yes
@@ -2023,6 +2256,19 @@ void GUI::undo()
 			charPos = charPosHist[previous];
 			historyLevel--;
 		}
+		// if previous step was 'REPLACE'
+		else if (deleted[previous].length()>=1 && inserted[previous].length()>=1)
+		{
+			// then we will INSERT the deleted and DELETE the inserted
+			cout << "Undo: now INSERTING+DELETING to undo REPLACING!\n";
+			
+			// DELETE (inserted) then INSERT (deleted) to roll back
+			source.erase(performedAt[previous], inserted[previous].length());
+			source.insert(performedAt[previous], deleted[previous]);
+			charPos = charPosHist[previous];
+			historyLevel--;
+		}
+		
 		else
 			return;
 
@@ -2224,7 +2470,7 @@ void GUI::setMessage(string strMessage)
 {
 	message.setFont(font); // font is a sf::Font
 	message.setCharacterSize(24); // in pixels, not points!
-	message.setColor(sf::Color::Green);
+	message.setColor(sf::Color(90,255,90));
 	int messageX = (WINDOW_WIDTH/2) - (strMessage.length() * charWidth) / 2;
 	message.setPosition(sf::Vector2f(messageX, (WINDOW_HEIGHT/2) - charHeight * 3));
 	message.setString(strMessage);
@@ -2251,12 +2497,12 @@ void GUI::adjustWindowSize()
 // autosaving (done every so often or when exiting...)
 void GUI::autoSave()
 {
-	string autoSavePath = defaultPath + "/__AUTOSAVED__.txt";
+	string autoSavePath = defaultPath + "\\__AUTOSAVED__.txt";
 	cout << "Autosaving to... " << autoSavePath << endl;
 	// save the file!
 	mml.setSource(source);
 	mml.saveFile(autoSavePath, &mplayer);
-	help.setQuickMessage("Auto-saving...");
+	help.setQuickMessage("AUTO-SAVING...");
 }
 
 // quick-save ... called when ALT + S is pressed
@@ -2272,4 +2518,43 @@ void GUI::quickSave()
 	// save the file!
 	mml.setSource(source);
 	mml.saveFile(currentPathAndFileName, &mplayer);
+}
+
+// check portaudio status every so often - if dropped out, restart...
+void GUI::handleAudioChecking()
+{
+	if(audioCheckClock.getElapsedTime().asSeconds() < 5.0f) // if not time yet, exit
+		return;
+	else
+	{
+		if(!mplayer.getStreamState())
+		{
+			help.setQuickMessage("RESETTING AUDIO...");
+			bool playerWasPlaying = mplayer.isPlaying();
+			long seekTo = mplayer.getFramePos(); // will clean seek again to current position
+			mplayer.pause();
+			mplayer.close();
+			mplayer.initialize(); // reinitialize portaudio...
+			cout << "Reinitializing portaudio...\n";
+			mplayer.resetForNewSong();
+			mml.parse(&mplayer); // reparse tone settings etc...
+			mplayer.goToBeginning();
+			if(playerWasPlaying)
+				mplayer.seekAndStart(seekTo);
+			else
+				mplayer.seek(seekTo);
+		}
+		audioCheckClock.restart();
+	}
+}
+
+
+
+// debugging utility function - dumps variables to a text file
+void GUI::dump(const std::string &dump)
+{
+	ofstream outFile;
+	outFile.open("_dump_.txt", ios::out);
+	outFile << dump << endl;
+	outFile.close();
 }

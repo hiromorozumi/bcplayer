@@ -633,12 +633,14 @@ MData::MData()
 {
 	sampleRate = SAMPLE_RATE;
 	totalFrames = 0;
+	nEvents = 0;
 }
 
 MData::MData(int sRate)
 {
 	sampleRate = sRate;
 	totalFrames = 0;
+	nEvents = 0;
 }
 
 MData::~MData()
@@ -654,6 +656,15 @@ void MData::clear()
 	len.resize(0);
 	param.clear();
 	param.resize(0);
+	
+	eventType.clear();
+	eventType.resize(0);
+	eventParam.clear();
+	eventParam.resize(0);
+	eventFrame.clear();
+	eventFrame.resize(0);
+	nEvents = 0;
+	
 	totalFrames = 0;
 }
 
@@ -681,12 +692,14 @@ DData::DData()
 {
 	sampleRate = SAMPLE_RATE;
 	totalFrames = 0;
+	nEvents = 0;
 }
 
 DData::DData(int sRate)
 {
 	sampleRate = sRate;
 	totalFrames = 0;
+	nEvents = 0;
 }
 
 DData::~DData()
@@ -702,6 +715,15 @@ void DData::clear()
 	len.resize(0);
 	param.clear();
 	param.resize(0);
+	
+	eventType.clear();
+	eventType.resize(0);
+	eventParam.clear();
+	eventParam.resize(0);
+	eventFrame.clear();
+	eventFrame.resize(0);
+	nEvents = 0;
+
 	totalFrames = 0;
 }
 
@@ -778,6 +800,178 @@ void Astro::refresh()
 
 
 
+// Fall class //////////////////////////////////////////////////////////////
+// Implementation //////////////////////////////////////////////////////////
+
+#include <iostream>
+#include <math.h>
+#include "BC/Fall.h"
+
+using namespace std;
+
+const double Fall::FALL_SAMPLE_RATE = 44100.0;
+const double Fall::FREQ_FLOOR = 20.0;
+
+Fall::Fall()
+{
+	// set default params for now...
+	enabled = false;
+	fallSpeed = 600.0;
+	fallFactor = 1.0;
+	octTraveled = 0.0;
+	octDeltaPerFrame = getDeltaPerFrame(fallSpeed);
+	waitPos = 0;
+	waitFrames = 0;
+}
+
+void Fall::setToDefault()
+{
+	// set default params for now...
+	enabled = false;
+	fallSpeed = 600.0;
+	fallFactor = 1.0;
+	octTraveled = 0.0;
+	octDeltaPerFrame = getDeltaPerFrame(fallSpeed);
+	waitPos = 0;
+	waitFrames = 0;
+}
+
+double Fall::getDeltaPerFrame(double fSpeed)
+{
+	return (fSpeed / 1200.0) / FALL_SAMPLE_RATE;
+}
+
+double Fall::setSpeed(double fSpeed)
+{
+	fallSpeed = fSpeed;
+	octDeltaPerFrame = getDeltaPerFrame(fSpeed);
+}
+
+double Fall::setWaitTime(double waitTimeMS)
+{
+	waitFrames = static_cast<int>(waitTimeMS / 1000.0 * FALL_SAMPLE_RATE);
+}
+
+void Fall::refresh()
+{
+	waitPos = 0;
+	octTraveled = 0.0;
+	fallFactor = 1.0;
+}
+
+void Fall::start()
+{
+	refresh();
+	enabled = true;
+}
+
+void Fall::stop()
+{
+	enabled = false;
+	refresh();
+}
+
+double Fall::process(double freq)
+{
+	if(waitPos < waitFrames)
+	{
+		waitPos++;
+		return freq;
+	}
+	else
+	{
+		octTraveled += octDeltaPerFrame;
+		if(octTraveled > 8.0) octTraveled = 8.0; // safeguard!
+		freq *= pow(0.5, octTraveled);
+		if(freq < FREQ_FLOOR) freq = FREQ_FLOOR; // safeguard!
+		return freq;
+	}
+}
+
+//////////////////////////////////////////////////////////////
+
+const double Rise::RISE_SAMPLE_RATE = 44100.0;
+const double Rise::FREQ_FLOOR = 20.0;
+
+Rise::Rise()
+{
+	// set default params for now...
+	enabled = false;
+	pos = 0;
+	riseSpeed = 1200.0;
+	riseRange = 100.0;
+	riseFactor = 1.0;
+	octDeviation = 100.0 / 1200.0;
+	octDeltaPerFrame = getDeltaPerFrame(riseSpeed);
+}
+
+void Rise::setToDefault()
+{
+	enabled = false;
+	pos = 0;
+	riseSpeed = 1200.0;
+	riseRange = 100.0;
+	riseFactor = 1.0;
+	octDeviation = 100.0 / 1200.0;
+	octDeltaPerFrame = getDeltaPerFrame(riseSpeed);	
+}
+
+double Rise::getDeltaPerFrame(double rSpeed)
+{
+	return (rSpeed / 1200.0) / RISE_SAMPLE_RATE;
+}
+
+void Rise::setSpeed(double rSpeed)
+{
+	riseSpeed = rSpeed;
+	octDeltaPerFrame = getDeltaPerFrame(rSpeed);
+}
+
+void Rise::setRange(double rRange)
+{
+	riseRange = rRange;
+	octDeviation = rRange / 1200.0;
+}
+
+void Rise::refresh()
+{
+	setRange(riseRange);
+	pos = 0;
+}
+
+void Rise::start()
+{
+	refresh();
+	enabled = true;
+}
+
+void Rise::stop()
+{
+	enabled = false;
+	refresh();
+}
+
+double Rise::process(double freq)
+{
+	pos++;
+	
+	if(octDeviation == 0.0)
+	{
+		return freq;
+	}
+	else
+	{
+		octDeviation -= octDeltaPerFrame;
+		if(octDeviation < 0.0) octDeviation = 0.0; // reached target freq!
+		freq *= pow(0.5, octDeviation);
+		if(freq < FREQ_FLOOR) freq = FREQ_FLOOR; // safeguard!
+		return freq;
+	}
+}
+
+
+
+
 // LFO.cpp ////////////////////////////////////////
 // LFO Class - Implementation /////////////////////
 
@@ -799,6 +993,7 @@ LFO::LFO()
 	setTable(0); // default table - sine wave
 	
 	// initialize variables with default settings
+	tableType = 0;
 	phase = 0;
 	waitPos = 0;
 	setWaitTime(200); // default wait - n milliseconds
@@ -808,6 +1003,25 @@ LFO::LFO()
 
 LFO::~LFO()
 {}
+
+void LFO::initialize()
+{
+	// TODO - if LFO table type set to something else... re-init to sine wave type
+	if(tableType!=0)
+	{
+		//
+		
+		
+	}
+	
+	// initialize variables with default settings
+	tableType = 0;
+	phase = 0;
+	waitPos = 0;
+	setWaitTime(200); // default wait - n milliseconds
+	setRange(24); // default LFO range - n cents of semitone
+	setSpeed(6.0); // defalt LFO speed - n cycles per second 	
+}
 	
 void LFO::setTable(int type)
 {
@@ -896,7 +1110,7 @@ double LFO::process(double originalFreq)
 
 using namespace std;
 
-const int OSC::OSC_TABLE_SIZE = 8192;
+const int OSC::OSC_TABLE_SIZE = 4096;
 const int OSC::ENV_TABLE_SIZE = 1024;
 const double OSC::OSC_SAMPLE_RATE = 44100.0;
 const float OSC::TWO_PI = 6.283185307;
@@ -905,7 +1119,10 @@ OSC::OSC()
 {
 	table.resize(OSC_TABLE_SIZE); // wave table (vector)
 	
+	tableType = 0; // FORCE setTable() to rewrite wavetable
 	setTable(1); // default - set up a square table
+	tableType = 1;
+	yFlip = 1.0f;
 	phase = 0.0;
 	increment = 0.0;
 	freq = 10.0; // not to set to zero to safeguard
@@ -914,6 +1131,7 @@ OSC::OSC()
 	gain = 0.5f; // default gain
 	
 	resting = false;
+	forceSilenceAtBeginning = false;
 	
 	nAttackFrames = 1000;
 	nPeakFrames = 1000;
@@ -934,6 +1152,17 @@ OSC::OSC()
 	astroEnabled = false;
 	lfoEnabled = false;
 	
+	fallActive = false;
+	riseActive = false;
+	
+	beefUp = false;
+	beefUpFactor = 1.0f;
+	compRatio = 4.0f;
+	compThreshold = 0.90f;
+	
+	popGuardCount = 0;
+	lastAmp = 0.0f;
+	
 	// initialize history table
 	clearHistory();
 }
@@ -943,6 +1172,17 @@ OSC::~OSC()
 
 void OSC::setTable(int type)
 {
+	// DEBUG
+	//if(tableType==type)
+	//	cout << "NO CHANGE TO WAVEFORM! YEY!!\n";
+	
+	// if requested type is the currently set type
+	// don't have to make any change... skip
+	if(tableType==type)
+		return;
+	
+	tableType = type;
+	
 	switch(type)
 	{
 		float maxAmp;
@@ -962,11 +1202,11 @@ void OSC::setTable(int type)
 		
 			for(int i=0; i<OSC_TABLE_SIZE/2; i++)
 			{
-				table[i] = 0.85f;
+				table[i] = 0.80f;
 			}
 			for(int i=OSC_TABLE_SIZE/2; i<OSC_TABLE_SIZE; i++)
 			{
-				table[i] = -0.85f;
+				table[i] = -0.80f;
 			}
 			break;
 		
@@ -979,9 +1219,16 @@ void OSC::setTable(int type)
 		// triangle wave
 		case 3:
 			for(int i=0; i<OSC_TABLE_SIZE/2; i++)
-				table[i] = -0.99f  + (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE/2)) * 1.98f;	
+			{
+				int index = OSC_TABLE_SIZE/4 + i;
+				table[index] = -0.99f  + (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE/2)) * 1.98f;
+			}				
 			for(int i=OSC_TABLE_SIZE/2; i<OSC_TABLE_SIZE; i++)
-				table[i] = 0.99f  - (static_cast<float>(i-OSC_TABLE_SIZE/2) / static_cast<float>(OSC_TABLE_SIZE/2)) * 1.98f;
+			{
+				int index = OSC_TABLE_SIZE/4 + i;
+				if(index>=OSC_TABLE_SIZE) index -= OSC_TABLE_SIZE;
+				table[index] = 0.99f  - (static_cast<float>(i-OSC_TABLE_SIZE/2) / static_cast<float>(OSC_TABLE_SIZE/2)) * 1.98f;
+			}
 			break;
 		
 		// sine wave with 3rd, 6th, 9th, 12th harmonics
@@ -1054,12 +1301,53 @@ void OSC::setTable(int type)
 			
 			break;
 
-		// default is sine wave...
-		default:
-			maxAmp = 0.99f;
-			for(int i=0; i<OSC_TABLE_SIZE; i++)
-				table[i] = sin( TWO_PI * (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE) ) ) * maxAmp;
+		// pulse wave 12.5%-87.5% ratio
+		case 6:
+			for(int i=0; i<OSC_TABLE_SIZE/8; i++)
+			{
+				table[i] = -0.80f;
+			}
+			for(int i=OSC_TABLE_SIZE/8; i<OSC_TABLE_SIZE; i++)
+			{
+				table[i] = 0.80f;
+			}			
+			break;			
 			
+		// pulse wave 25%-75% ratio
+		case 7:
+		
+			for(int i=0; i<OSC_TABLE_SIZE/4; i++)
+			{
+				table[i] = -0.80f;
+			}
+			for(int i=OSC_TABLE_SIZE/4; i<OSC_TABLE_SIZE; i++)
+			{
+				table[i] = 0.80f;
+			}		
+			break;
+			
+		// pulse wave 33.3% ratio
+		case 8:
+			for(int i=0; i<OSC_TABLE_SIZE/3; i++)
+			{
+				table[i] = -0.80f;
+			}
+			for(int i=OSC_TABLE_SIZE/3; i<OSC_TABLE_SIZE; i++)
+			{
+				table[i] = 0.80f;
+			}				
+			break;
+
+		// default is SQUARE wave...
+		default:
+			for(int i=0; i<OSC_TABLE_SIZE/2; i++)
+			{
+				table[i] = -0.80f;
+			}
+			for(int i=OSC_TABLE_SIZE/2; i<OSC_TABLE_SIZE; i++)
+			{
+				table[i] = 0.80f;
+			}
 			break;
 			
 	}
@@ -1140,10 +1428,13 @@ float OSC::getEnvelopeOutput()
 	// if resting flag is on, means you're in release stage
 	if(resting)
 	{
-		if(!envRfinished)
+		if(!envRfinished && !forceSilenceAtBeginning)
 			output = sustainLevel * ( static_cast<float>(nReleaseFrames - releasePos) / static_cast<float>(nReleaseFrames) );
 		else
+		{
 			output = 0.0f;
+			phase = 0; // reset phase for next note!
+		}
 	}
 	
 	return output;
@@ -1154,10 +1445,18 @@ void OSC::setToRest()
 	resting = true;
 }
 
+void OSC::confirmFirstNoteIsRest()
+{
+	forceSilenceAtBeginning = true;
+}
+
 void OSC::advance()
 {
 	// advance on the sample table
 	phase += increment;
+	
+	adjustedFreq = freq;
+	
 	while(phase >= OSC_TABLE_SIZE)
 	{
 		phase -= OSC_TABLE_SIZE;
@@ -1169,7 +1468,22 @@ void OSC::advance()
 		adjustedFreq = astro.process(freq);
 		if(astro.stateChanged())
 			setIncrement(adjustedFreq);
+		
+		// if Fall is enabled, process and adjust frequency
+		if(fallActive)
+		{
+			adjustedFreq = fall.process(adjustedFreq);
+			setIncrement(adjustedFreq);
+		}
+
+		// if Rise is enabled, process and adjust frequency
+		if(riseActive)
+		{
+			adjustedFreq = rise.process(adjustedFreq);
+			setIncrement(adjustedFreq);
+		}		
 	}
+	
 	// if LFO is enabled, process and adjust frequency
 	else if(lfoEnabled)
 	{
@@ -1179,16 +1493,38 @@ void OSC::advance()
 		setIncrement(adjustedFreq);
 	}
 	
+	// if Fall is enabled, process and adjust frequency
+	if(fallActive && !astroEnabled)
+	{
+		adjustedFreq = fall.process(freq);
+		setIncrement(adjustedFreq);
+	}
+	
+	// if Rise is enabled, process and adjust frequency
+	if(riseActive && !astroEnabled)
+	{
+		adjustedFreq = rise.process(adjustedFreq);
+		setIncrement(adjustedFreq);
+	}
+	
 	// advance envelope also
 	advanceEnvelope();
 }
 
 void OSC::setNewNote(double newFreq)
 {
+	forceSilenceAtBeginning = false;
 	setFrequency(newFreq);
-	initializePhase();
+	// initializePhase();
 	refreshEnvelope();
 	resting = false;
+	if(fallActive && fall.octTraveled > 0.0)
+		stopFall();
+	if(riseActive && rise.pos > 30)
+		stopRise();
+	
+	// enable pop-guarding...
+	popGuardCount = 60;
 }
 
 // set the frequency and phase increment at once
@@ -1235,6 +1571,9 @@ void OSC::enableLFO()
 void OSC::disableLFO()
 	{ lfoEnabled = false; }
 	
+void OSC::initializeLFO()
+	{ lfo.initialize();	}
+	
 void OSC::setLFOwaitTime(int milliseconds)
 	{ lfo.setWaitTime(milliseconds); }
 
@@ -1243,6 +1582,62 @@ void OSC::setLFOrange(int cents)
 
 void OSC::setLFOspeed(double cyclePerSeconds)
 	{ lfo.setSpeed(cyclePerSeconds); }
+
+void OSC::startFall()
+{
+	fallActive = true;
+	fall.start();
+}
+
+void OSC::stopFall()
+{
+	fallActive = false;
+	fall.stop();
+}
+
+void OSC::setFallSpeed(double fallSpeed)
+{
+	fall.setSpeed(fallSpeed);
+}
+
+void OSC::setFallWait(double waitTimeMS)
+{
+	fall.setWaitTime(waitTimeMS);
+}
+
+void OSC::setFallToDefault()
+{
+	stopFall();	
+	fall.setToDefault();
+}
+
+void OSC::startRise()
+{
+	riseActive = true;
+	rise.start();
+}
+
+void OSC::stopRise()
+{
+	riseActive = false;
+	rise.stop();
+}
+
+void OSC::setRiseSpeed(double riseSpeed)
+{
+	rise.setSpeed(riseSpeed);
+}
+
+void OSC::setRiseRange(double riseRange)
+{
+	rise.setRange(riseRange);
+}
+
+void OSC::setRiseToDefault()
+{
+	stopRise();
+	rise.setToDefault();
+}
 
 void OSC::setAttackTime(int attackTimeMS)
 {
@@ -1304,6 +1699,13 @@ void OSC::initializePhase()
 	phase = 0;
 }
 
+void OSC::refreshForSongBeginning()
+{
+	initializePhase();
+	lastAmp = 0.0f;
+	refreshEnvelope();
+}
+
 float OSC::getOutput()
 {
 	/*
@@ -1321,7 +1723,24 @@ float OSC::getOutput()
 	int ph = static_cast<int> (phase);
 	// cout << "phase=" << phase << "..";
 	
-	float out = table[ph] * getEnvelopeOutput() * gain;
+	float out;
+	
+	if(yFlip > 0)
+		out = table[ph] * getEnvelopeOutput();
+	else
+		out = -table[ph] * getEnvelopeOutput();
+	
+	// if BeefUp is enabled... beef up and compress!
+	if(beefUp)
+		out = compress(out * beefUpFactor);
+	
+	out *= gain;
+	
+	// popguard - just for the first 2 frames...
+	if(popGuardCount>0)
+		out = popGuard(out);
+	else
+		lastAmp = out;
 	
 	historyWriteWait++;
 	if(historyWriteWait >= 8)
@@ -1332,6 +1751,48 @@ float OSC::getOutput()
 	
 	return out;
 }
+
+float OSC::compress(float in)
+{
+	float out = in;
+	if(in >= 0.0f && in > compThreshold) // positive value
+	{
+		float delta = in - compThreshold;
+		delta = delta / compRatio;
+		out = compThreshold + delta;
+		if(out>=0.99f) out = 0.99f;
+	}
+	else if(in <= 0.0f && in < -compThreshold) // negative value
+	{
+		float delta = in + compThreshold;
+		delta = delta / compRatio;
+		out = -compThreshold + delta;
+		if(out<=-0.99f) out = -0.99f;
+	}
+	return out;
+}
+
+float OSC::popGuard(float in)
+{
+	float inPositive = in + 1.0f;
+	if(inPositive<0.0f) inPositive = 0.0f;
+	float lastAmpPositive = lastAmp + 1.0f;
+	if(lastAmpPositive<0.0f) lastAmpPositive = 0.0f;
+	// float travelAmount = lastAmpPositive - inPositive;
+	inPositive += (lastAmpPositive - inPositive) * (static_cast<float>(popGuardCount) / 60.0f);
+	popGuardCount--;
+	
+	return (inPositive-1.0f);
+}
+
+void OSC::enableBeefUp()
+{ beefUp = true; }
+
+void OSC::disableBeefUp()
+{ beefUp = false; }
+
+void OSC::setBeefUpFactor(float factor)
+{ beefUpFactor = factor; }
 
 // push current data to table that keeps an array of historical data
 // (used for meter visualization)
@@ -1364,6 +1825,19 @@ void OSC::clearHistory()
 	historyWriteIndex = 0;
 }
 
+// set yFlip between 1.0 and -1.0
+// determines if wavetable is read as is or vertically inverted
+void OSC::flipYAxis()
+{
+	yFlip = -1.0f;
+}
+
+// reset yFlip to default normal 1.0 (table reading won't get vertically inverted)
+void OSC::resetYFlip()
+{
+	yFlip = 1.0f;
+}
+
 
 
 
@@ -1379,7 +1853,7 @@ void OSC::clearHistory()
 
 using namespace std;
 
-const int NOSC::NOSC_NTABLE_SIZE = 4096;
+const int NOSC::NOSC_NTABLE_SIZE = 9999;
 const int NOSC::NOSC_PTABLE_SIZE = 4096;
 const double NOSC::NOSC_SAMPLE_RATE = 44100.0;
 
@@ -1387,8 +1861,15 @@ NOSC::NOSC()
 {	
 	// set up a noise wave nTable
 	nTable.resize(NOSC_NTABLE_SIZE);
+	nPinkTable.resize(NOSC_NTABLE_SIZE);
 	pTable.resize(NOSC_PTABLE_SIZE);
 	setTable();
+
+	for(int i=0; i<6; i++)
+		noiseType[i] = 0; // set all to use white noise to begin
+	
+	squareLevel = 1.0f;
+	noiseLevel = 1.0f;
 	
 	// initialize NOSC variables
 	phase = 0.0;
@@ -1401,17 +1882,31 @@ NOSC::NOSC()
 	pPitchFall = 0;
 	
 	// set default envelope for each drum
-	setDrumTone(0, 3, 30,  20,  0.8, 200.0,  50  , 0.9, 2.0); // kick
-	setDrumTone(1, 3, 20, 120, 0.95, 720.0,  100 , 0.85, 1.2); // snare
-	setDrumTone(2, 3, 17,  3,  0.5, 2400.0, 1   , 0.2, 2.0); // hat
+	setDrumTone(0, 1, 25,  15,  0.8, 200.0,  50  , 0.9, 2.0); // kick
+	setDrumTone(1, 1, 20, 120, 0.95, 720.0,  100 , 0.85, 1.2); // snare
+	setDrumTone(2, 1, 17,  3,  0.5, 2400.0, 1   , 0.2, 2.0); // hat
 	
-	setDrumTone(3, 3, 30,  20,  0.4, 200.0,  50  , 0.5, 2.0); // kick - quiet
-	setDrumTone(4, 3, 20, 120, 0.5, 720.0,  100 , 0.45, 1.2); // snare - quiet
-	setDrumTone(5, 3, 17,  3,  0.2, 2400.0, 1   , 0.1, 2.0); // hat - quiet
+	setDrumTone(3, 1, 25,  15,  0.4, 200.0,  50  , 0.5, 2.0); // kick - quiet
+	setDrumTone(4, 1, 20, 120, 0.5, 720.0,  100 , 0.45, 1.2); // snare - quiet
+	setDrumTone(5, 1, 17,  3,  0.2, 2400.0, 1   , 0.1, 2.0); // hat - quiet
+	
+	kickFreq = 200.0;
+	snareFreq = 720.0;
+	hihatFreq = 2400.0;
+	
+	kickPeakTime = 25; kickDecayTime = 15;
+	snarePeakTime = 20; snareDecayTime = 120;
+	hihatPeakTime = 17; hihatDecayTime = 3;
 
 	envPos = 0;	
 	
 	envFinished = false;
+
+	beefUp = false;
+	beefUpFactor = 1.0f;
+	beefUpFactorNoise = 1.0f;
+	compRatio = 4.0f;
+	compThreshold = 0.90f;
 	
 	// initialize history table
 	clearHistory();
@@ -1428,10 +1923,23 @@ void NOSC::setTable()
 	
 	int midTablePoint = NOSC_PTABLE_SIZE / 2;
 	
+	// create pTable (pitched element)
 	for(int i=0; i<midTablePoint; i++)
 		pTable[i] = 0.95f;
 	for(int i=midTablePoint; i<NOSC_PTABLE_SIZE; i++)
 		pTable[i] = -0.95f;
+	
+	float b0, b1, b2;
+	
+	// create pink noise table from white noise
+	// using paul Kellet's economy method (http://www.firstpr.com.au/dsp/pink-noise/#uses)
+	for(int i=0; i<NOSC_NTABLE_SIZE; i++)
+	{
+		b0 = 0.99765f * b0 + nTable[i] * 0.0990460f; 
+		b1 = 0.96300f * b1 + nTable[i] * 0.2965164f; 
+		b2 = 0.57000f * b2 + nTable[i] * 1.0526913f; 
+		nPinkTable[i] = (b0 + b1 + b2 + nTable[i] * 0.1848f) * 0.32f;	
+	}
 }
 
 void NOSC::setGain(float g)
@@ -1466,7 +1974,136 @@ void NOSC::setDrumTone(int dType, double nMilSecAttack, double nMilSecPeak, doub
 	pStartLevel[dType] = pBeginningLevel;
 	levelFallDelta[dType] = peakLevel[dType] / static_cast<float>(NOSC_SAMPLE_RATE * nMilSecPTime/1000.0);
 	
-	cout << "attack=" << nAttackFrames[dType] << " peakTime=" << nPeakFrames[dType] << " decayTime" << nDecayFrames[dType] << " envFrames=" << nEnvFrames[dType] << endl;
+	// DEBUG
+	// cout << "attack=" << nAttackFrames[dType] << " peakTime=" << nPeakFrames[dType] << " decayTime" << nDecayFrames[dType] << " envFrames=" << nEnvFrames[dType] << endl;
+}
+
+// reset all drum settings to default
+void NOSC::resetDrumTones()
+{
+	squareLevel = 1.0f;
+	noiseLevel = 1.0f;
+	
+	useWhiteNoise();
+	
+	// set default envelope for each drum
+	setDrumTone(0, 1, 25,  15,  0.8, 200.0,  50  , 0.9, 2.0); // kick
+	setDrumTone(1, 1, 20, 120, 0.95, 720.0,  100 , 0.85, 1.2); // snare
+	setDrumTone(2, 1, 17,  3,  0.5, 2400.0, 1   , 0.2, 2.0); // hat
+	
+	setDrumTone(3, 1, 25,  15,  0.4, 200.0,  50  , 0.5, 2.0); // kick - quiet
+	setDrumTone(4, 1, 20, 120, 0.5, 720.0,  100 , 0.45, 1.2); // snare - quiet
+	setDrumTone(5, 1, 17,  3,  0.2, 2400.0, 1   , 0.1, 2.0); // hat - quiet
+	
+	kickFreq = 200.0;
+	snareFreq = 720.0;
+	hihatFreq = 2400.0;
+	
+	kickPeakTime = 25; kickDecayTime = 15;
+	snarePeakTime = 20; snareDecayTime = 120;
+	hihatPeakTime = 17; hihatDecayTime = 3;
+}
+
+// sets kick's length - takes a millisecond value
+void NOSC::setKickLength(int lenMilSec)
+{
+	int peakTime, decayTime;
+	if(lenMilSec < 0) lenMilSec = 0;
+	else if(lenMilSec > 400) lenMilSec = 400;
+	
+	if(lenMilSec >= 25)
+	{
+		peakTime = 25;
+		decayTime = lenMilSec - peakTime;
+	}
+	else // if smaller than 30 milsec, you just get peak stage w/ no decay
+	{
+		peakTime = lenMilSec;
+		decayTime = 0;
+	}
+
+	setDrumTone(0, 1, peakTime,  decayTime,  0.8, kickFreq,  50  , 0.9, 2.0); // kick	
+	setDrumTone(3, 1, peakTime,  decayTime,  0.4, kickFreq,  50  , 0.5, 2.0); // kick - quiet
+	kickPeakTime = peakTime; kickDecayTime = decayTime;
+}
+
+// sets snare's length - takes a millisecond value
+void NOSC::setSnareLength(int lenMilSec)
+{
+	int peakTime, decayTime;
+	if(lenMilSec < 0) lenMilSec = 0;
+	else if(lenMilSec > 1000) lenMilSec = 1000;
+	
+	if(lenMilSec >= 20)
+	{
+		peakTime = 20;
+		decayTime = lenMilSec - peakTime;
+	}
+	else // if smaller than 20 milsec, you just get peak stage w/ no decay
+	{
+		peakTime = lenMilSec;
+		decayTime = 0;
+	}
+	
+	setDrumTone(1, 1, peakTime,  decayTime, 0.95, snareFreq,  100 , 0.85, 1.2); // snare
+	setDrumTone(4, 1, peakTime,  decayTime, 0.5 , snareFreq,  100 , 0.45, 1.2); // snare - quiet
+	snarePeakTime = peakTime; snareDecayTime = decayTime;
+}
+
+// sets hihat's length - takes a millisecond value
+void NOSC::setHiHatLength(int lenMilSec)
+{
+	int peakTime, decayTime;
+	if(lenMilSec < 0) lenMilSec = 0;
+	else if(lenMilSec > 1000) lenMilSec = 1000;
+
+	if(lenMilSec >= 17)
+	{
+		peakTime = 17;
+		decayTime = lenMilSec - peakTime;
+	}
+	else // if smaller than 17 milsec, you just get peak stage w/ no decay
+	{
+		peakTime = lenMilSec;
+		decayTime = 0;
+	}
+
+	setDrumTone(2, 1, peakTime, decayTime,  0.5, hihatFreq, 1   , 0.2, 2.0); // hat
+	setDrumTone(5, 1, peakTime, decayTime,  0.2, hihatFreq, 1   , 0.1, 2.0); // hat - quiet
+	hihatPeakTime = peakTime; hihatDecayTime = decayTime;
+}
+
+// change kick's tuning frequency
+// takes a double variable from 50 to 350 (default=200.0, at 50%)
+void NOSC::tuneKick(double freq)
+{
+	if(freq < 50.0) freq = 50.0;
+	else if(freq > 350.0) freq = 350.0;
+	setDrumTone(0, 1, kickPeakTime, kickDecayTime,  0.8, freq,  50  , 0.9, 2.0); // kick
+	setDrumTone(3, 1, kickPeakTime, kickDecayTime,  0.4, freq,  50  , 0.5, 2.0); // kick - quiet
+	kickFreq = freq;
+}
+
+// change snare's tuning frequency
+// takes a double variable from 200 to 1240 (default=720.0 at 50%)
+void NOSC::tuneSnare(double freq)
+{
+	if(freq < 200.0) freq = 200.0;
+	else if(freq > 1240.0) freq = 1240.0;
+	setDrumTone(1, 1, snarePeakTime, snareDecayTime, 0.95, freq,  100 , 0.85, 1.2); // snare
+	setDrumTone(4, 1, snarePeakTime, snareDecayTime, 0.5,  freq,  100 , 0.45, 1.2); // snare - quiet
+	snareFreq = freq;	
+}
+
+// change snare's tuning frequency
+// takes a double variable from 1200 to 3600 (default=2400.0 at 50%)
+void NOSC::tuneHiHat(double freq)
+{
+	if(freq < 1200.0) freq = 1200.0;
+	else if(freq > 3600.0) freq = 3600.0;
+	setDrumTone(2, 1, hihatPeakTime, hihatDecayTime,  0.5, freq, 1   , 0.2, 2.0); // hat
+	setDrumTone(5, 1, hihatPeakTime, hihatDecayTime,  0.2, freq, 1   , 0.1, 2.0); // hat - quiet
+	hihatFreq = freq;	
 }
 
 void NOSC::setNewDrum(int dType)
@@ -1581,9 +2218,28 @@ float NOSC::getPitchOutput()
 float NOSC::getOutput()
 {
 	int ph = (int) phase;
-	float noiseOut = nTable[ph];
-	float pitchOut = getPitchOutput();
-	float out = ( noiseOut * gain + pitchOut * gain) * getEnvelopeOutput();
+
+	float noiseOut;
+	
+	if(noiseType[drumType]==1) // if one, use pink noise
+		noiseOut = nPinkTable[ph] * noiseLevel;
+	else // if zero, use white noise
+		noiseOut = nTable[ph] * noiseLevel;	
+		
+		
+
+	float pitchOut = getPitchOutput() * squareLevel;
+
+	float out;
+	
+	// output the regular way
+	if(!beefUp)
+		out = ( noiseOut * gain + pitchOut * gain) * getEnvelopeOutput();
+	
+	// if beefUp is enabled
+	else
+		out = limit( 	pitchOut * gain * getEnvelopeOutput() * beefUpFactor +
+						noiseOut * gain * getEnvelopeOutput() * beefUpFactorNoise );
 	
 	historyWriteWait++;
 	if(historyWriteWait >= 8)
@@ -1596,6 +2252,75 @@ float NOSC::getOutput()
 	// return ( noiseOut * gain + pitchOut * gain) * getEnvelopeOutput();
 }
 
+// same compressor used for regular OSC channel ... might be kind of soft for drums though
+float NOSC::compress(float in)
+{
+	float out = in;
+	if(in >= 0.0f && in > compThreshold) // positive value
+	{
+		float delta = in - compThreshold;
+		delta = delta / compRatio;
+		out = compThreshold + delta;
+		if(out>=0.99f) out = 0.99f;
+	}
+	else if(in <= 0.0f && in < -compThreshold) // negative value
+	{
+		float delta = in + compThreshold;
+		delta = delta / compRatio;
+		out = -compThreshold + delta;
+		if(out<=-0.99f) out = -0.99f;
+	}
+	return out;
+}
+
+// alternate BEEFUP processing... brickwall limiter
+float NOSC::limit(float in)
+{
+	float out = in;
+	if(out>=0.99f) out = 0.99f;
+	else if(out<=-0.99f) out = -0.99f;
+	return out;
+}
+
+void NOSC::enableBeefUp()
+{ beefUp = true; }
+
+void NOSC::disableBeefUp()
+{ beefUp = false; }
+
+void NOSC::setBeefUpFactor(float factor)
+{
+	beefUpFactor = factor; // this works on the pitched element
+	beefUpFactorNoise = ((factor - 1.0f) * 0.80f) + 1.0f; // works on the noise element
+}
+
+void NOSC::useWhiteNoise()
+{ 
+	for(int i=0; i<6; i++)
+		noiseType[i] = 0;
+}
+
+void NOSC::usePinkNoise()
+{ 
+	for(int i=0; i<6; i++)
+		noiseType[i] = 1;
+}
+	
+void NOSC::setKickNoiseType(int type)
+	{ noiseType[0] = type; noiseType[3] = type; }
+	
+void NOSC::setSnareNoiseType(int type)
+	{ noiseType[1] = type; noiseType[4] = type; }
+
+void NOSC::setHiHatNoiseType(int type)
+	{ noiseType[2] = type; noiseType[5] = type; }
+	
+void NOSC::setNoiseLevel(float nLevel)
+	{ noiseLevel = nLevel; }
+
+void NOSC::setSquareLevel(float sqLevel)
+	{ squareLevel = sqLevel; }
+	
 // push current data to table that keeps an array of historical data
 // (used for meter visualization)
 void NOSC::pushHistory(float g)
@@ -1738,9 +2463,11 @@ void DelayLine::clearBuffer()
 /// MML Class - Implementation ////////////////
 
 #include <cstdlib>
+#include <ctime>
 #include <algorithm>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <math.h>
 #include <vector>
 #include <string>
@@ -1763,6 +2490,48 @@ MML::~MML()
 
 void MML::initialize(double sampleRate, double tempo)
 {
+	for(int i=0; i<N_EVENT_TAGS; i++)
+		eventTag[i] = "";
+	eventTag[0]="DEFAULTTONE"; eventTag[1]="LFO=ON"; eventTag[2]="LFO=OFF"; eventTag[3]="PRESET=BEEP";
+	eventTag[4]="PRESET=POPPYVIB"; eventTag[5]="PRESET=POPPY"; eventTag[6]="PRESET=BELL";
+	eventTag[20]="WAVEFLIP";
+	eventTag[100]="WAVEFORM="; eventTag[101]="ATTACKTIME="; eventTag[102]="PEAKTIME="; eventTag[103]="DECAYTIME=";
+	eventTag[104]="RELEASETIME="; eventTag[105]="PEAKLEVEL="; eventTag[106]="SUSTAINLEVEL=";
+	eventTag[107]="ASTRO=OFF"; eventTag[108]="ASTRO=";
+	eventTag[109]="LFORANGE="; eventTag[110]="LFOSPEED="; eventTag[111]="LFOWAIT=";
+	eventTag[112]="FALLSPEED="; eventTag[113]="FALLWAIT="; eventTag[114]="RISESPEED="; eventTag[115]="RISERANGE=";
+	eventTag[116]="BEEFUP="; eventTag[117]="RINGMOD=OFF"; eventTag[118]="RINGMOD=";
+	
+	// NOTE: if you want to register a tag that contains another tag name, register the longer tag first!
+	// for example, PRESET=POPPYVIB must come earlier than PRESET=POPPY
+	
+	for(int i=0; i<N_EVENT_TAGS; i++)
+	{
+		if(eventTag[i].empty())
+			eventTagLen[i] = 0;
+		else
+			eventTagLen[i] = eventTag[i].length();
+	}
+
+	for(int i=0; i<N_EVENT_TAGS; i++)
+		eventTagDrum[i] = "";
+	eventTagDrum[0]="RESETDRUMS"; eventTagDrum[1]="WHITENOISE"; eventTagDrum[2]="PINKNOISE";
+	eventTagDrum[3]="KICKNOISE=WHITE"; eventTagDrum[4]="KICKNOISE=PINK";
+	eventTagDrum[5]="SNARENOISE=WHITE"; eventTagDrum[6]="SNARENOISE=PINK";
+	eventTagDrum[7]="HIHATNOISE=WHITE"; eventTagDrum[8]="HIHATNOISE=PINK";
+	eventTagDrum[100]="KICKPITCH="; eventTagDrum[101]="SNAREPITCH="; eventTagDrum[102]="HIHATPITCH=";
+	eventTagDrum[103]="BEEFUP="; 
+	eventTagDrum[104]="KICKLENGTH="; eventTagDrum[105]="SNARELENGTH="; eventTagDrum[106]="HIHATLENGTH=";
+	eventTagDrum[107]="SQUARELEVEL="; eventTagDrum[108]="NOISELEVEL=";
+	
+	for(int i=0; i<N_EVENT_TAGS; i++)
+	{
+		if(eventTagDrum[i].empty())
+			eventTagLenDrum[i] = 0;
+		else
+			eventTagLenDrum[i] = eventTagDrum[i].length();
+	}
+
 	this->sampleRate = sampleRate;
 	this->tempo = tempo;
 	calculateTiming();
@@ -1836,6 +2605,7 @@ string MML::setSource(string masterStr)
 				while(!GetAsyncKeyState(VK_SPACE)){}
 				while(GetAsyncKeyState(VK_SPACE)){}
 				*/
+				
 			}
 			else if(nextCh=='d' || nextCh=='D') // drum channel source
 			{
@@ -1939,6 +2709,17 @@ string MML::takeOutSpaces(string str)
 		else
 			done = true;
 	}
+
+	// take out '(', too...
+	done = false;
+	while(!done)
+	{
+		found = str.find('(');
+		if(found != string::npos)
+			str.erase(found, 1);
+		else
+			done = true;
+	}	
 	
 	// DEBUG
 	// cout << "After taking out RET '\n' chars... resulting string:" << endl << endl << str << endl;
@@ -1954,7 +2735,6 @@ double MML::getFrequency(int toneNum)
 // hub function to parse ALL MML source strings
 string MML::parse(MPlayer* player)
 {
-
 	// initialize parameters back to default
 	tempo = 120.0;
 	octave = 4;						// default octave is 4
@@ -1980,8 +2760,8 @@ string MML::parse(MPlayer* player)
 	}
 
 	// parse drum channel data
-	parseDrumSource(player);
-
+	parseDrumSource(player);	
+	
 	return "success";
 }
 
@@ -1991,7 +2771,7 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 {
 	// choose the MData object to write to.
 	if(channel >= 0 && channel <= 8)
-		output = &player->data[channel]; // gets pointer to MData object
+		output = &(player->data[channel]); // gets pointer to MData object
 	else
 		return "Error - choose valid channel!";
 
@@ -1999,216 +2779,55 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 	string str = source[channel];
 
 	//
-	// first parse the configuration part
+	// first take care of event change commands
+	// enclose them with parenthesis for now...
 	//
 	
-	// start by resetting... wavetable = 1 (just to safeguard!)
-	player->osc[channel].setTable(1); // square wave	
-
-	bool configDone = false; // when all config statements are parsed, this gets set to true
+	
+	bool eventTagsDone = false; // when all config statements are parsed, this gets set to true
+	int searchPos = 0;
+	int strLen = str.length();
+	str = str + "              $$$$$$"; // safeguard, and signal end of string!
 	size_t found;
 
-	while(!configDone)
-	{
-		configDone = true;
-		
-		// follow format -> setEnvelope(int attackTimeMS, int peakTimeMS, int decayTimeMS, 
-		//								int releaseTimeMS, float peakLV, float sustainLV)
-
-		// reset tone... to default
-		found = str.find("DEFAULTTONE");
-		if(found != string::npos)
+	while(!eventTagsDone)
+	{		
+		// if an event tag is found, enclose with ()
+		for(int i=0; i<N_EVENT_TAGS; i++)
 		{
-			configDone = false;
-			player->osc[channel].setEnvelope(0, 0, 0, 0, 0.99f, 0.99f);
-			str.erase(found, 11); // erase this statement
+			if(!eventTag[i].empty())
+			{
+				if( str.substr(searchPos, eventTagLen[i]) == eventTag[i] ) // found!
+				{					
+					int targetLen = eventTagLen[i];
+					int digits = 0;
+					
+					// number 100 and later - these are tags that take parameters
+					// let's place ')' after the parameter digits
+					if(i>=100)
+					{
+						int digitStart = searchPos + targetLen;
+						digits = countDigits( str.substr(digitStart, 5) );
+					}
+					
+					str.insert(searchPos + targetLen + digits, ")");
+					str.insert(searchPos,"(");
+					strLen += 2; // we just increased the string's length by w chars...
+					searchPos += targetLen; // advance.. we should skip the newly inserted '('
+					i = N_EVENT_TAGS; // force this loop to end
+				}
+			}
 		}
 		
-		// sets up a preset tone... pure beep!
-		found = str.find("PRESET=BEEP");
-		if(found != string::npos)
-		{
-			configDone = false;
-			player->osc[channel].setTable(1); // square wave
-			player->osc[channel].setEnvelope(0, 0, 0, 0, 0.65f, 0.65f);
-			str.erase(found, 11); // erase this statement
-		}
-		
-		found = str.find("WAVEFORM=");
-		if(found != string::npos)
-		{
-			configDone = false;
-			string strValue = str.substr(found+9,2); // get 2 digits following '='
-			int valueDigits = countDigits(strValue);
-			strValue = strValue.substr(0, valueDigits);
-			int value = atoi(strValue.c_str());
-			value = min(99, max(0, value)); // floor + ceil the value
-			player->osc[channel].setTable(value); // set wavetable for this value
-			str.erase(found, 9+valueDigits); // erase this statement
-		}
-
-		found = str.find("ATTACKTIME=");
-		if(str.find("ATTACKTIME=") != string::npos)
-		{
-			configDone = false;
-			string strValue = str.substr(found+11,4); // get 4 digits following '='
-			int valueDigits = countDigits(strValue);
-			strValue = strValue.substr(0, valueDigits);
-			int value = atoi(strValue.c_str());
-			value = min(9999, max(1, value)); // floor + ceil the value
-
-			player->osc[channel].setAttackTime(value); // set attack time to this value
-			str.erase(found, 11+valueDigits); // erase this statement
-		}
-
-		found = str.find("PEAKTIME=");
-		if(str.find("PEAKTIME=") != string::npos)
-		{
-			configDone = false;
-			string strValue = str.substr(found+9,4); // get 4 digits following '='
-			int valueDigits = countDigits(strValue);
-			strValue = strValue.substr(0, valueDigits);
-			int value = atoi(strValue.c_str());
-			value = min(9999, max(1, value)); // floor + ceil the value
-
-			player->osc[channel].setPeakTime(value); // set peak time to this value
-			str.erase(found, 9+valueDigits); // erase this statement
-		}
-
-		found = str.find("DECAYTIME=");
-		if(str.find("DECAYTIME=") != string::npos)
-		{
-			configDone = false;
-			string strValue = str.substr(found+10,4); // get 4 digits following '='
-			int valueDigits = countDigits(strValue);
-			strValue = strValue.substr(0, valueDigits);
-			int value = atoi(strValue.c_str());
-			value = min(9999, max(1, value)); // floor + ceil the value
-
-			player->osc[channel].setDecayTime(value); // set decay time to this value
-			str.erase(found, 10+valueDigits); // erase this statement
-		}
-
-		found = str.find("RELEASETIME=");
-		if(str.find("RELEASETIME=") != string::npos)
-		{
-			configDone = false;
-			string strValue = str.substr(found+12,4); // get 4 digits following '='
-			int valueDigits = countDigits(strValue);
-			strValue = strValue.substr(0, valueDigits);
-			int value = atoi(strValue.c_str());
-			value = min(9999, max(1, value)); // floor + ceil the value
-
-			player->osc[channel].setReleaseTime(value); // set release time to this value
-			str.erase(found, 12+valueDigits); // erase this statement
-		}
-
-		found = str.find("PEAKLEVEL=");
-		if(str.find("PEAKLEVEL=") != string::npos)
-		{
-			configDone = false;
-			string strValue = str.substr(found+10,8); // get 8 digits following '='
-			int valueDigits = countDigits(strValue);
-			strValue = strValue.substr(0, valueDigits);
-			double value = static_cast<double>( atoi(strValue.c_str()) );
-			value = min(100.0, max(0.01, value)); // floor + ceil the value
-			float valuef = static_cast<float>(value / 100.0);
-
-			player->osc[channel].setPeakLevel(valuef); // set peak level to this value
-			str.erase(found, 10+valueDigits); // erase this statement
-		}
-
-		found = str.find("SUSTAINLEVEL=");
-		if(str.find("SUSTAINLEVEL=") != string::npos)
-		{
-			configDone = false;
-			string strValue = str.substr(found+13,8); // get 8 digits following '='
-			int valueDigits = countDigits(strValue);
-			strValue = strValue.substr(0, valueDigits);
-			double value =  static_cast<double>( atoi(strValue.c_str()) );
-			value = min(100.0, max(0.01, value)); // floor + ceil the value
-			float valuef = static_cast<float>(value / 100.0);
-
-			player->osc[channel].setSustainLevel(valuef); // set sustain level to this value
-			str.erase(found, 13+valueDigits); // erase this statement
-		}
-
-		found = str.find("ASTRO=");
-		if(str.find("ASTRO=") != string::npos)
-		{
-			configDone = false;
-			string strValue = str.substr(found+6,3); // get 3 digits following '='
-			int valueDigits = countDigits(strValue);
-			strValue = strValue.substr(0, valueDigits);
-			int value = atoi(strValue.c_str());
-			value = min(100, max(1, value) ); // floor + ceil the value
-
-			player->setAstro(channel, value); // set astro to this value
-			str.erase(found, 6+valueDigits); // erase this statement
-		}
-
-		found = str.find("LFO=ON");
-		if(found != string::npos)
-		{
-			configDone = false;
-			player->osc[channel].enableLFO();
-			str.erase(found, 6); // erase this statement
-		}
-		
-		found = str.find("LFO=OFF");
-		if(found != string::npos)
-		{
-			configDone = false;
-			player->osc[channel].disableLFO();
-			str.erase(found, 7); // erase this statement
-		}
-
-		found = str.find("LFORANGE=");
-		if(str.find("LFORANGE=") != string::npos)
-		{
-			configDone = false;
-			string strValue = str.substr(found+9,4); // get 4 digits following '='
-			int valueDigits = countDigits(strValue);
-			strValue = strValue.substr(0, valueDigits);
-			int value = atoi(strValue.c_str());
-			value = min(2400, max(1, value)); // floor + ceil the value
-
-			player->osc[channel].setLFOrange(value); // set LFO range to this value
-			str.erase(found, 9+valueDigits); // erase this statement
-		}
-
-		found = str.find("LFOSPEED=");
-		if(str.find("LFOSPEED=") != string::npos)
-		{
-			configDone = false;
-			string strValue = str.substr(found+9,8); // get 3 digits following '='
-			int valueDigits = countDigits(strValue);
-			strValue = strValue.substr(0, valueDigits);
-			double value = static_cast<double>( atof(strValue.c_str()) );
-			value = min(100.0, max(0.1, value)); // floor + ceil the value
-
-			player->osc[channel].setLFOspeed(value); // set LFO speed to this value
-			str.erase(found, 9+valueDigits); // erase this statement
-		}
-
-		found = str.find("LFOWAIT=");
-		if(str.find("LFOWAIT=") != string::npos)
-		{
-			configDone = false;
-			string strValue = str.substr(found+8,4); // get 4 digits following '='
-			int valueDigits = countDigits(strValue);
-			strValue = strValue.substr(0, valueDigits);
-			int value = atoi(strValue.c_str());
-			value = min(3000, max(1, value)); // floor + ceil the value
-
-			player->osc[channel].setLFOwaitTime(value); // set LFO wait time to this value
-			str.erase(found, 8+valueDigits); // erase this statement
-		}
+		searchPos++;
+		if(searchPos>=strLen)
+			eventTagsDone = true;
 
 	}
 
-	// cout << "after parsing the configuration..." << endl;
+	// cout << "after enclosing all the event commands..." << endl;
 	// cout << "channel " << channel << " string is now.." << endl << str << endl;
+	// while(!GetAsyncKeyState(VK_SPACE));
 
 	//
 	// parse the music part
@@ -2217,7 +2836,7 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 	// first, parse the repeat signs
 	// (any repeated parts will be duplicated)
 
-	str = str + "$$$$$$"; // to signal end of string
+	str = str + "     $$$$$$"; // to signal end of string
 	bool done = false;
 
 	int i = 0;
@@ -2349,14 +2968,44 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 				i++;
 			}
 			
+			if(str.at(i)==',') // fall effect for this note!
+			{
+				// DEBUG
+				cout << "parsing - found a ',' - FALL!\n";
+				
+				// push this 'fall' event to events vector in MData
+				output->eventType.push_back(50); // FALL
+				output->eventParam.push_back(0);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;
+				i++;
+			}
+			
+			int extraFrames = 0;
+			
 			if(str.at(i)=='~') // tie to another note unit
 			{
 				noteLengthToAssign += noteLength;
+				extraFrames += noteLength;
 				i++;
-				while(str.at(i)=='~')
+				
+				while(str.at(i)=='~' || str.at(i)==',')
 				{
-					noteLengthToAssign += noteLength;
-					i++;
+					if(str.at(i)=='~')
+					{
+						noteLengthToAssign += noteLength;
+						extraFrames += noteLength;
+						i++;
+					}
+					else if(str.at(i)==',') // FALL after or among ties!
+					{
+						// push this 'fall' event to events vector in MData
+						output->eventType.push_back(50); // FALL
+						output->eventParam.push_back(0);
+						output->eventFrame.push_back(framesWritten + extraFrames);
+						output->nEvents++;
+						i++;
+					}
 				}
 			}
 
@@ -2388,6 +3037,17 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 			octave++;
 			if(octave > 9)
 				octave = 9;
+			i++;
+		}
+		
+		else if(ch=='*') // rise!
+		{
+			// push this 'rise' event to events vector in MData
+			output->eventType.push_back(60); // FALL
+			output->eventParam.push_back(0);
+			output->eventFrame.push_back(framesWritten);
+			output->nEvents++;
+			
 			i++;
 		}
 
@@ -2434,13 +3094,17 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 			i++;
 
 			bool tupletReadDone = false;
-			int notes[20] = {0};
-			int tie[20] = {0};
+			int notes[32] = {0};
+			int tie[32] = {0};
 			int nNotes = 0;
 			int nTied = 0;
 			int tupletIndex = 0;
 			int wholeLength = noteLength; // default length to set for now
-
+			int risePosition[32] = {0};
+			int riseIndex = 0;
+			int nRises = 0;
+			int fallPosition = 0;
+			
 			while(!tupletReadDone)
 			{
 				// cout << "read: " << i << " ";
@@ -2492,7 +3156,27 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 						toneNum--;
 						i++;
 					}
-
+					
+					// process ties here...
+					//
+					
+					// if a tie follows a note name
+					if(str.at(i)=='~')
+					{
+						tie[tupletIndex]++;
+						nTied++;
+						i++;
+						while(str.at(i)=='~') // we might even have more ties!
+						{
+							tie[tupletIndex]++;
+							nTied++;
+							i++;
+						}
+					}
+					
+					//
+					//
+					
 					notes[tupletIndex] = toneNum;
 
 					nNotes++;
@@ -2506,6 +3190,8 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 					nNotes++;
 					tupletIndex++;
 				}
+				
+				/*
 
 				else if(str.at(i)=='~') // tie last note
 				{
@@ -2513,6 +3199,8 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 					nTied++;
 					i++;
 				}
+				
+				*/
 
 				else if(str.at(i)=='<') // oct down
 				{
@@ -2523,6 +3211,14 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 				else if(str.at(i)=='>') // oct up
 				{
 					octave++;
+					i++;
+				}
+				
+				else if(str.at(i)=='*') // we have a rise!
+				{
+					risePosition[riseIndex] = nNotes;
+					riseIndex++;
+					nRises++;
 					i++;
 				}
 
@@ -2541,6 +3237,28 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 							cout << " note=" << notes[itr] << " tie=" << tie[itr] << " / ";
 						cout << endl;
 						*/
+						
+						// if there are rises in tuplet, process
+						if(nRises > 0)
+						{
+							for(int i=0;i<nRises;i++)
+							{
+								int nNotesPassed = risePosition[i];
+								int waitUnits = 0;
+								for(int j=0; j<nNotesPassed; j++)
+								{
+									waitUnits++;
+									waitUnits += tie[j];
+								}
+								
+								int extraAdd = waitUnits * eachTupletLength;
+								// push this 'rise' event to events vector in MData
+								output->eventType.push_back(60); // RISE
+								output->eventParam.push_back(0);
+								output->eventFrame.push_back(framesWritten + extraAdd);
+								output->nEvents++;						
+							}
+						}
 	
 						// push tuplet data to mData
 						for(int j=0; j<nNotes; j++)
@@ -2607,29 +3325,37 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 			// int valueDigits = countDigits(strValue);
 			int value = atoi(strValue.c_str());
 			value = min(10, max(1, value)); // floor + ceil the value
-
-			// push this 'event' data to mData object
-			output->freqNote.push_back(70000); // event# 70000 is 'specify volume'
-			output->len.push_back(0);
-			output->param.push_back(value);	 // 10-scaled value is passed as param
+			
+			// push this event to events vector in MData
+			output->eventType.push_back(0);
+			output->eventParam.push_back(value);
+			output->eventFrame.push_back(framesWritten);
+			output->nEvents++;
+			
 			i++;
 		}
 
 		else if(str.at(i)=='^') // Volume increment request
 		{
-			// push this 'event' data to mData object
-			output->freqNote.push_back(71000); // event# 71000 is 'increment volume'
-			output->len.push_back(0);
-			output->param.push_back(0);	 // no param needed
+			
+			// push this event to events vector in MData
+			output->eventType.push_back(1); // event type 1 is 'increment volume'
+			output->eventParam.push_back(0);
+			output->eventFrame.push_back(framesWritten);
+			output->nEvents++;
+			
 			i++;
 		}
 
 		else if(str.at(i)=='_') // Volume decrement request
 		{
-			// push this 'event' data to mData object
-			output->freqNote.push_back(72000); // event# 72000 is 'decrement volume'
-			output->len.push_back(0);
-			output->param.push_back(0);	 // no param needed
+			
+			// push this event to events vector in MData
+			output->eventType.push_back(2); // event type 2 is 'decrement volume'
+			output->eventParam.push_back(0);
+			output->eventFrame.push_back(framesWritten);
+			output->nEvents++;
+			
 			i++;
 		}
 		
@@ -2650,17 +3376,336 @@ string MML::parseChannelSource(MPlayer* player, int channel)
 				i++;
 			}
 		}
+		// if we have an event command...
+		else if(str.at(i)=='(')
+		{
+			i++;
+			
+			if(str.substr(i, 11) == "DEFAULTTONE")
+			{
+				output->eventType.push_back(1000);
+				output->eventParam.push_back(0);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 11) == "PRESET=BEEP")
+			{
+				output->eventType.push_back(1001);
+				output->eventParam.push_back(0);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 15) == "PRESET=POPPYVIB") // longer tag must come first!
+			{
+				output->eventType.push_back(1003);
+				output->eventParam.push_back(0);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 12) == "PRESET=POPPY") // then the shorter one..
+			{
+				output->eventType.push_back(1002);
+				output->eventParam.push_back(0);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 11) == "PRESET=BELL")
+			{
+				output->eventType.push_back(1004);
+				output->eventParam.push_back(0);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 6) == "LFO=ON")
+			{
+				output->eventType.push_back(30);
+				output->eventParam.push_back(1); // 1 for on
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 7) == "LFO=OFF")
+			{
+				output->eventType.push_back(30);
+				output->eventParam.push_back(0); // 0 for off
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 9) == "WAVEFORM=")
+			{
+				string strValue = str.substr(i+9,2); // get 2 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(99, max(0, value)); // floor + ceil the value				
+				
+				output->eventType.push_back(10);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;
+			}
+			else if(str.substr(i, 8) == "WAVEFLIP")
+			{
+				output->eventType.push_back(11);
+				output->eventParam.push_back(0); // 0 - dummy
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 11) == "ATTACKTIME=")
+			{
+				string strValue = str.substr(i+11,4); // get 4 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(9999, max(0, value)); // floor + ceil the value				
+				
+				output->eventType.push_back(20);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;
+			}
+			else if(str.substr(i, 9) == "PEAKTIME=")
+			{
+				string strValue = str.substr(i+9,4); // get 4 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(9999, max(0, value)); // floor + ceil the value
+				
+				output->eventType.push_back(21);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 10) == "DECAYTIME=")
+			{
+				string strValue = str.substr(i+10,4); // get 4 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(9999, max(0, value)); // floor + ceil the value
 
+				output->eventType.push_back(22);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;					
+			}
+			else if(str.substr(i, 12) == "RELEASETIME=")
+			{
+				string strValue = str.substr(i+12,4); // get 4 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(9999, max(0, value)); // floor + ceil the value
+
+				output->eventType.push_back(23);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;	
+			}
+			else if(str.substr(i, 10) == "PEAKLEVEL=")
+			{
+				string strValue = str.substr(i+10,3); // get 3 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(100, max(0, value)); // floor + ceil the value
+				
+				output->eventType.push_back(24);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;					
+			}
+			else if(str.substr(i, 13) == "SUSTAINLEVEL=")
+			{
+				string strValue = str.substr(i+13,3); // get 3 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(100, max(0, value)); // floor + ceil the value
+
+				output->eventType.push_back(25);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;					
+			}
+			else if(str.substr(i, 6) == "ASTRO=")
+			{
+				if(str.substr(i, 9) == "ASTRO=OFF")
+				{
+					output->eventType.push_back(41);
+					output->eventParam.push_back(0);
+					output->eventFrame.push_back(framesWritten);
+					output->nEvents++;
+				}
+				else
+				{
+					string strValue = str.substr(i+6,3); // get 3 digits following '='
+					int valueDigits = countDigits(strValue);
+					strValue = strValue.substr(0, valueDigits);
+					int value = atoi(strValue.c_str());
+					value = min(100, max(0, value) ); // floor + ceil the value
+	
+					output->eventType.push_back(40);
+					output->eventParam.push_back(value);
+					output->eventFrame.push_back(framesWritten);
+					output->nEvents++;
+				}
+			}
+			else if(str.substr(i, 9) == "LFORANGE=")
+			{
+				string strValue = str.substr(i+9,4); // get 4 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(3600, max(1, value)); // floor + ceil the value				
+				
+				output->eventType.push_back(31);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 9) == "LFOSPEED=")
+			{
+				string strValue = str.substr(i+9,3); // get 3 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atof(strValue.c_str());
+				value = min(100, max(0, value)); // floor + ceil the value
+				
+				output->eventType.push_back(32);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 8) == "LFOWAIT=")
+			{
+				string strValue = str.substr(i+8,4); // get 4 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(3000, max(1, value)); // floor + ceil the value
+				
+				output->eventType.push_back(33);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 10) == "FALLSPEED=") // 100ths of an octave per second
+			{
+				string strValue = str.substr(i+10,4); // get 4 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(6000, max(1, value)); // floor + ceil the value
+				
+				output->eventType.push_back(51);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 9) == "FALLWAIT=") // in milliseconds
+			{
+				string strValue = str.substr(i+9,4); // get 4 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(9999, max(1, value)); // floor + ceil the value
+				
+				output->eventType.push_back(52);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 10) == "RISESPEED=") // 100ths of an octave per second
+			{
+				string strValue = str.substr(i+10,4); // get 4 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(9600, max(1, value)); // floor + ceil the value
+				
+				output->eventType.push_back(61);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 10) == "RISERANGE=") // in 100ths of octaves, pitch deviation to start from
+			{
+				string strValue = str.substr(i+10,4); // get 4 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(9600, max(1, value)); // floor + ceil the value
+				
+				output->eventType.push_back(62);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 7) == "BEEFUP=") // in a value 0 to 100 - percentage value
+			{
+				string strValue = str.substr(i+7,3); // get 3 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(100, max(0, value)); // floor + ceil the value
+				
+				output->eventType.push_back(70);
+				output->eventParam.push_back(value);
+				output->eventFrame.push_back(framesWritten);
+				output->nEvents++;				
+			}
+			else if(str.substr(i, 8) == "RINGMOD=") // in a value 0 to 9 - channel num, 0 for OFF
+			{
+				if(str.substr(i, 11) == "RINGMOD=OFF")
+				{
+					output->eventType.push_back(81);
+					output->eventParam.push_back(0);
+					output->eventFrame.push_back(framesWritten);
+					output->nEvents++;
+				}
+				else
+				{
+					string strValue = str.substr(i+8,1); // get 1 digit following '='
+					int valueDigits = countDigits(strValue);
+					strValue = strValue.substr(0, valueDigits);
+					int value = atoi(strValue.c_str());
+					value = min(9, max(0, value)); // floor + ceil the value
+					
+					output->eventType.push_back(80);
+					output->eventParam.push_back(value);
+					output->eventFrame.push_back(framesWritten);
+					output->nEvents++;
+				}				
+			}
+			// cout << "event parsing done! " << str.substr(i,13) << "\n";
+			
+			// fast forward to where we find the next ')'
+			bool fastFwdDone = false;
+			while(!fastFwdDone)
+			{
+				i++;
+				if(str.at(i)==')') // stop at where ')' is
+					fastFwdDone = true;
+				else if(str.at(i)=='$') // we didn't have ')'!!
+					fastFwdDone = true;
+			}
+			
+		}
 		else if(ch=='$') // end of string
 		{
 			// insert data to signify end
 			output->freqNote.push_back(-1.0);
 			output->len.push_back(-1);
 			output->param.push_back(0);
+			output->eventType.push_back(-1);
+			output->eventParam.push_back(0);
+			output->eventFrame.push_back(framesWritten);
+			output->nEvents++;
 
 			// integrity check
 
-			// int r = framesWritten % quarterNoteLength;
+			int r = framesWritten % quarterNoteLength;
 
 			// cout << "End of parsing a channel... num of framesWritten=" << framesWritten << endl;
 			// cout << "Dividing by quarter note length, remainder=" << r << endl << endl;
@@ -2691,11 +3736,62 @@ string MML::parseDrumSource(MPlayer* player)
 
 	// channel source string to work on
 	string str = dsource;
+	
 
+	//
+	// first take care of event change commands
+	// enclose them with parenthesis for now...
+	//
+	
+	
+	bool eventTagsDone = false; // when all config statements are parsed, this gets set to true
+	int searchPos = 0;
+	int strLen = str.length();
+	str = str + "                $$$$$$"; // safeguard, and signal end of string!
+	size_t found;
+
+	while(!eventTagsDone)
+	{		
+		// if an event tag is found, enclose with ()
+		for(int i=0; i<N_EVENT_TAGS; i++)
+		{
+			if(!eventTagDrum[i].empty())
+			{
+				if( str.substr(searchPos, eventTagLenDrum[i]) == eventTagDrum[i] ) // found!
+				{					
+					int targetLen = eventTagLenDrum[i];
+					int digits = 0;
+					
+					// number 100 and later - these are tags that take parameters
+					// let's place ')' after the parameter digits
+					if(i>=100)
+					{
+						int digitStart = searchPos + targetLen;
+						digits = countDigits( str.substr(digitStart, 5) );
+					}
+					
+					str.insert(searchPos + targetLen + digits, ")");
+					str.insert(searchPos,"(");
+					strLen += 2; // we just increased the string's length by w chars...
+					searchPos += targetLen; // advance.. we should skip the newly inserted '('
+					i = N_EVENT_TAGS; // force this loop to end
+				}
+			}
+		}
+		
+		searchPos++;
+		if(searchPos>=strLen)
+			eventTagsDone = true;
+
+	}
+	
+	cout << "After parsing drum source...\n" << str << endl;
+	
 	// first, parse the repeat signs
 	// (any repeated parts will be duplicated)
 
 	str = str + "$$$$$$"; // to signal end of string
+	
 	bool done = false;
 
 	int i = 0;
@@ -2854,8 +3950,8 @@ string MML::parseDrumSource(MPlayer* player)
 			i++;
 
 			bool tupletReadDone = false;
-			int notes[20] = {0};
-			int tie[20] = {0};
+			int notes[32] = {0};
+			int tie[32] = {0};
 			int nNotes = 0;
 			int nTied = 0;
 			int tupletIndex = 0;
@@ -2899,12 +3995,31 @@ string MML::parseDrumSource(MPlayer* player)
 
 					// advance index...
 					i++;
+					
+					//
+					// process ties here...
+					//
+					
+					// if a tie follows a note name
+					if(str.at(i)=='~')
+					{
+						tie[tupletIndex]++;
+						nTied++;
+						i++;
+						while(str.at(i)=='~') // we might even have more ties!
+						{
+							tie[tupletIndex]++;
+							nTied++;
+							i++;
+						}
+					}
 
 					notes[tupletIndex] = drumNote;
 
 					nNotes++;
 					tupletIndex++;
 				}
+				/*
 
 				else if(str.at(i)=='~') // tie last note
 				{
@@ -2912,6 +4027,7 @@ string MML::parseDrumSource(MPlayer* player)
 					nTied++;
 					i++;
 				}
+				*/
 				
 				else if(str.at(i)==':') // we have a rest...
 				{
@@ -2997,30 +4113,248 @@ string MML::parseDrumSource(MPlayer* player)
 			// int valueDigits = countDigits(strValue);
 			int value = atoi(strValue.c_str());
 			value = min(10, max(1, value)); // floor + ceil the value
-
-			// push this 'event' data to mData object
-			dOutput->drumNote.push_back(70000); // event# 70000 is 'specify volume'
-			dOutput->len.push_back(0);
-			dOutput->param.push_back(value);	 // 10-scaled value is passed as param
+			
+			// push this event to events vector in MData
+			dOutput->eventType.push_back(0); // type 0 is 'specify volume'
+			dOutput->eventParam.push_back(value);
+			dOutput->eventFrame.push_back(framesWritten);
+			dOutput->nEvents++;
+			
 			i++;
 		}
 
 		else if(str.at(i)=='^') // Volume increment request
 		{
-			// push this 'event' data to mData object
-			dOutput->drumNote.push_back(71000); // event# 71000 is 'increment volume'
-			dOutput->len.push_back(0);
-			dOutput->param.push_back(0);	 // no param needed
+			
+			// push this event to events vector in MData
+			dOutput->eventType.push_back(1); // event type 1 is 'increment volume'
+			dOutput->eventParam.push_back(0);
+			dOutput->eventFrame.push_back(framesWritten);
+			dOutput->nEvents++;			
+			
 			i++;
 		}
 
 		else if(str.at(i)=='_') // Volume decrement request
 		{
-			// push this 'event' data to mData object
-			dOutput->drumNote.push_back(72000); // event# 72000 is 'decrement volume'
-			dOutput->len.push_back(0);
-			dOutput->param.push_back(0);	 // no param needed
+			
+			// push this event to events vector in MData
+			dOutput->eventType.push_back(2); // event type 2 is 'decrement volume'
+			dOutput->eventParam.push_back(0);
+			dOutput->eventFrame.push_back(framesWritten);
+			dOutput->nEvents++;			
+			
 			i++;
+		}
+		
+		else if(str.at(i)=='(')
+		{
+			i++;
+			
+			if(str.substr(i, 10) == "RESETDRUMS")
+			{
+				// push this event to events vector in DData
+				dOutput->eventType.push_back(500); // event type 500 is 'reset drum settings'
+				dOutput->eventParam.push_back(0);
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 10) == "WHITENOISE")
+			{
+				// push this event to events vector in DData
+				dOutput->eventType.push_back(530); // event type 530 is 'use white noise'
+				dOutput->eventParam.push_back(0);
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 9) == "PINKNOISE")
+			{
+				// push this event to events vector in DData
+				dOutput->eventType.push_back(531); // event type 531 is 'use pink noise'
+				dOutput->eventParam.push_back(0);
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 15) == "KICKNOISE=WHITE")
+			{
+				// push this event to events vector in DData
+				dOutput->eventType.push_back(532); // event type 532 is 'set kick's noise type'
+				dOutput->eventParam.push_back(0); // 0 for white noise
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 14) == "KICKNOISE=PINK")
+			{
+				// push this event to events vector in DData
+				dOutput->eventType.push_back(532); // event type 532 is 'set kick's noise type'
+				dOutput->eventParam.push_back(1); // 1 for pink noise
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 16) == "SNARENOISE=WHITE")
+			{
+				// push this event to events vector in DData
+				dOutput->eventType.push_back(533); // event type 533 is 'set snare's noise type'
+				dOutput->eventParam.push_back(0); // 0 for white noise
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 15) == "SNARENOISE=PINK")
+			{
+				// push this event to events vector in DData
+				dOutput->eventType.push_back(533); // event type 533 is 'set snare's noise type'
+				dOutput->eventParam.push_back(1); // 1 for pink noise
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 16) == "HIHATNOISE=WHITE")
+			{
+				// push this event to events vector in DData
+				dOutput->eventType.push_back(534); // event type 533 is 'set hihat's noise type'
+				dOutput->eventParam.push_back(0); // 0 for white noise
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 15) == "HIHATNOISE=PINK")
+			{
+				// push this event to events vector in DData
+				dOutput->eventType.push_back(534); // event type 533 is 'set hihat's noise type'
+				dOutput->eventParam.push_back(1); // 1 for pink noise
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 10) == "KICKPITCH=")
+			{
+				string strValue = str.substr(i+10,3); // get 3 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(100, max(0, value)); // floor + ceil the value
+	
+				dOutput->eventType.push_back(510);
+				dOutput->eventParam.push_back(value);
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 11) == "SNAREPITCH=")
+			{
+				string strValue = str.substr(i+11,3); // get 3 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(100, max(0, value)); // floor + ceil the value
+	
+				dOutput->eventType.push_back(511);
+				dOutput->eventParam.push_back(value);
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 11) == "HIHATPITCH=")
+			{
+				string strValue = str.substr(i+11,3); // get 3 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(100, max(0, value)); // floor + ceil the value
+	
+				dOutput->eventType.push_back(512);
+				dOutput->eventParam.push_back(value);
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 7) == "BEEFUP=")
+			{
+				string strValue = str.substr(i+7,3); // get 3 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(100, max(0, value)); // floor + ceil the value
+	
+				dOutput->eventType.push_back(520);
+				dOutput->eventParam.push_back(value);
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 11) == "KICKLENGTH=")
+			{
+				string strValue = str.substr(i+11,3); // get 3 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(400, max(0, value)); // floor + ceil the value
+	
+				dOutput->eventType.push_back(540); // event no. 540 = KICKLENGTH
+				dOutput->eventParam.push_back(value);
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 12) == "SNARELENGTH=")
+			{
+				string strValue = str.substr(i+12,4); // get 4 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(1000, max(0, value)); // floor + ceil the value
+	
+				dOutput->eventType.push_back(541); // event no. 541 = SNARELENGTH
+				dOutput->eventParam.push_back(value);
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 12) == "HIHATLENGTH=")
+			{
+				string strValue = str.substr(i+12,4); // get 4 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(1000, max(0, value)); // floor + ceil the value
+	
+				dOutput->eventType.push_back(542); // event no. 542 = HIHATLENGTH
+				dOutput->eventParam.push_back(value);
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 12) == "SQUARELEVEL=")
+			{
+				string strValue = str.substr(i+12,3); // get 3 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(100, max(0, value)); // floor + ceil the value
+	
+				dOutput->eventType.push_back(550); // event no. 550 = SQUARELEVEL
+				dOutput->eventParam.push_back(value);
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			else if(str.substr(i, 11) == "NOISELEVEL=")
+			{
+				string strValue = str.substr(i+11,3); // get 3 digits following '='
+				int valueDigits = countDigits(strValue);
+				strValue = strValue.substr(0, valueDigits);
+				int value = atoi(strValue.c_str());
+				value = min(100, max(0, value)); // floor + ceil the value
+	
+				dOutput->eventType.push_back(551); // event no. 550 = NOISELEVEL
+				dOutput->eventParam.push_back(value);
+				dOutput->eventFrame.push_back(framesWritten);
+				dOutput->nEvents++;
+			}
+			
+			cout << "event parsing done! " << str.substr(i,13) << "\n";
+			
+			// fast forward to where we find the next ')'
+			bool fastFwdDone = false;
+			while(!fastFwdDone)
+			{
+				i++;
+				if(str.at(i)==')') // stop at where ')' is
+					fastFwdDone = true;
+				else if(str.at(i)=='$') // we didn't have ')'!!
+					fastFwdDone = true;
+			}
+			
+			
 		}
 
 		// '%%' is for bookmarking
@@ -3048,6 +4382,10 @@ string MML::parseDrumSource(MPlayer* player)
 			dOutput->drumNote.push_back(-1);
 			dOutput->len.push_back(0);
 			dOutput->param.push_back(0);
+			dOutput->eventType.push_back(-1);
+			dOutput->eventParam.push_back(0);
+			dOutput->eventFrame.push_back(framesWritten);
+			dOutput->nEvents++;
 
 			// integrity check
 
@@ -3057,7 +4395,7 @@ string MML::parseDrumSource(MPlayer* player)
 			// cout << "Dividing by quarter note length, remainder=" << r << endl << endl;
 
 			// write the total frame length written
-			// output->totalFrames = framesWritten;
+			dOutput->totalFrames = framesWritten;
 
 			done = true;
 		}
@@ -3116,6 +4454,19 @@ void MML::parseGlobalSource(MPlayer* player)
 			str.erase(fpos, 6+valueDigits);
 
 		}
+		else if(str.find("REPEAT=") != string::npos)
+		{
+			fpos = str.find("REPEAT=");
+			string strValue = str.substr(fpos+7,1); // get 1 digit following '='
+			int valueDigits = countDigits(strValue);
+			int value = atoi(strValue.c_str());
+			value = min(9, max(1, value)); // floor + ceil the value
+
+			// set repeat count to the value that was read
+			player->disableLooping();
+			player->setRepeatsRemaining(value);
+			str.erase(fpos, 7+valueDigits);
+		}
 		else if(str.find("LOOP=ON") != string::npos)
 		{
 			player->loopEnabled = true; // enable loop
@@ -3135,6 +4486,36 @@ void MML::parseGlobalSource(MPlayer* player)
 		{
 			player->delayEnabled = false;// turn delay off
 			str.erase(str.find("DELAY=OFF"), 9);
+		}
+		else if(str.find("DELAYTIME=AUTO3") != string::npos)
+		{
+			fpos = str.find("DELAYTIME=AUTO3");
+			int eraseLen = 15;
+			double magicNum = 39999.996; // 333.3333 * 120
+			if(str.at(fpos+15)=='L') // if 'DELAYTIME=AUTO3L', set to longer 3-based value
+			{
+				magicNum = 79999.992; // 666.6666 * 120
+				eraseLen++;
+			}
+			
+			int value = magicNum / tpo; // calculate tempo-adjusted delay time -> 60000 / tempo
+			value = min(999, max(10, value)); // floor + ceil the value
+
+			// set delay parameters - first delay, delay time, gain (negative for no change)
+			player->delay[0].setParameters(value, value, -0.1f); // -> LEFT channel = 0
+			player->delay[1].setParameters(value*3/2, value, -0.1f); // -> RIGHT channel = 1
+			str.erase(fpos, eraseLen);		
+		}
+		else if(str.find("DELAYTIME=AUTO") != string::npos)
+		{
+			fpos = str.find("DELAYTIME=AUTO");
+			int value = 60000 / tpo; // calculate tempo-adjusted delay time -> 60000 / tempo
+			value = min(999, max(10, value)); // floor + ceil the value
+
+			// set delay parameters - first delay, delay time, gain (negative for no change)
+			player->delay[0].setParameters(value, value, -0.1f); // -> LEFT channel = 0
+			player->delay[1].setParameters(value*3/2, value, -0.1f); // -> RIGHT channel = 1
+			str.erase(fpos, 14);		
 		}
 		else if(str.find("DELAYTIME=") != string::npos)
 		{
@@ -3281,7 +4662,10 @@ string MML::loadFile(string filename, MPlayer* player)
 	if(!inFile)
 	{
 		errLog("Error loading file: ", filename);
-		return "Error";
+		string strToReturn = "Load error...\xFF";
+		setSource(strToReturn);
+		inFile.close();
+		return strToReturn;
 	}
 
 	string fileContent = "";
@@ -3376,10 +4760,24 @@ int MML::countDigits(string snippet)
 // prints an error message to a log file
 void MML::errLog(std::string errText1, std::string errText2)
 {
+	// get the current time from TIMESTAMP
+	time_t t = time(0);   // get time now
+    struct tm * now = localtime( & t );
+	string strTime = "";
+	strTime += toString(now->tm_year + 1900) + "-" + toString(now->tm_mon + 1) + "-" + toString(now->tm_mday) + "-"; 
+	strTime += toString(now->tm_hour) + ":" + toString(now->tm_min); 
+		 
 	std::ofstream ofs;
 	ofs.open("_errors_mml.txt", std::ofstream::out | std::ofstream::app);
-	ofs << errText1 << errText2 << endl;
+	ofs << errText1 << errText2 << " (" << strTime << ")" << endl;
 	ofs.close();
+}
+
+std::string MML::toString(int n)
+{
+	stringstream ss;
+	ss << n;
+	return ss.str();
 }
 
 
@@ -3400,7 +4798,7 @@ void MML::errLog(std::string errText1, std::string errText2)
 
 /*----------
 
-#include <sndfile.hh>
+#include <sndfile.h>
 #include <lame/lame.h>
 
 ----------*/
@@ -3430,7 +4828,7 @@ int MPlayer::playerCallback (
 	float soundAmplitudeLeft;
 	float soundAmplitudeRight;
 
-	for(unsigned long i=0; i<framesPerBuffer; i++)
+	for(unsigned long ii=0; ii<framesPerBuffer; ii++)
 	{
 		if(!playing) // if player is not playing or finished playing, just pass 0
 		{
@@ -3458,40 +4856,27 @@ int MPlayer::playerCallback (
 			{
 				if(!channelDone[i])
 				{
+					
+					// if there are event requests, digest those first
+					bool eventsDone = false;
+					
+					while(!eventsDone)
+					{
+						// if next event in vector is set to happen at this frame pos, process
+						if( (data[i].eventFrame[eventIndex[i]] <= framePos) && (eventIndex[i] < data[i].nEvents) )
+						{
+							processEvent(i, data[i].eventType[eventIndex[i]], 
+											data[i].eventParam[eventIndex[i]]);
+							eventIndex[i]++;
+						}
+						else
+							eventsDone = true;
+					}					
+					
 					remainingFrames[i]--;
 					if(remainingFrames[i] <= 0)
 					{
 						noteIndex[i]++;
-
-						// if there are event requests (freq >= 70000), digest those first
-						bool eventsDone = false;
-
-						while(!eventsDone)
-						{
-							int readValue = static_cast<int>(data[i].freqNote[noteIndex[i]]);
-							if(readValue==70000.0) // 'specify volume'
-							{
-								// convert the passed value(1-10) to float (0.0 to 0.5f)
-								float gainToSet
-									= static_cast<float>(data[i].param[noteIndex[i]]) / 20.0f;
-								setChannelGain(i, gainToSet);
-								noteIndex[i]++;
-							}
-							else if(readValue==71000.0) // 'increment volume'
-							{
-								float gainToSet = min(0.5f, getChannelGain(i)+0.05f);
-								setChannelGain(i, gainToSet);
-								noteIndex[i]++;
-							}
-							else if(readValue==72000.0) // 'decrement volume'
-							{
-								float gainToSet = max(0.001f, getChannelGain(i)-0.05f);
-								setChannelGain(i, gainToSet);
-								noteIndex[i]++;
-							}
-							else // next freq value is not any event request, so we're done here
-								eventsDone = true;
-						}
 
 						// and if you get to the end of MML signal (freq = -1.0), set flag
 						if(data[i].freqNote[noteIndex[i]] < 0)
@@ -3519,40 +4904,26 @@ int MPlayer::playerCallback (
 			// now handle drum channel!
 			if(!dChannelDone)
 			{
+				// if there are event requests, digest those first
+				bool eventsDone = false;
+
+				while(!eventsDone)
+				{
+					// if next event in vector is set to happen at this frame pos, process
+					if( (ddata.eventFrame[dEventIndex] <= framePos) && (dEventIndex < ddata.nEvents) )
+					{
+						// cout << "event found! for drums" << endl;
+						processDrumEvent(ddata.eventType[dEventIndex], ddata.eventParam[dEventIndex]);
+						dEventIndex++;
+					}
+					else
+						eventsDone = true;
+				}
+				
 				dRemainingFrames--;
 				if(dRemainingFrames <= 0)
 				{
 					dNoteIndex++; // move onto the next drum note index
-
-						// if there are event requests (freq >= 70000), digest those first
-						bool eventsDone = false;
-
-						while(!eventsDone)
-						{
-							int readValue = ddata.drumNote[dNoteIndex];
-							if(readValue==70000) // 'specify volume'
-							{
-								// convert the passed value(1-10) to float (0.0 to 0.5f)
-								float gainToSet
-									= static_cast<float>(ddata.param[dNoteIndex]) / 20.0f;
-								setDChannelGain(gainToSet);
-								dNoteIndex++;
-							}
-							else if(readValue==71000) // 'increment volume'
-							{
-								float gainToSet = min(0.5f, getDChannelGain()+0.05f);
-								setDChannelGain(gainToSet);
-								dNoteIndex++;
-							}
-							else if(readValue==72000) // 'decrement volume'
-							{
-								float gainToSet = max(0.001f, getDChannelGain()-0.05f);
-								setDChannelGain(gainToSet);
-								dNoteIndex++;
-							}
-							else // next freq value is not any event request, so we're done here
-								eventsDone = true;
-						}
 
 					// and if you get to the end of MML signal (drumNote = -1.0), set flag
 					if(ddata.drumNote[dNoteIndex] < 0 || dNoteIndex >= ddata.getSize())
@@ -3580,9 +4951,43 @@ int MPlayer::playerCallback (
 			if(	channelDone[0] && channelDone[1] && channelDone[2] &&
 				channelDone[3] && channelDone[4] && channelDone[5] &&
 				channelDone[6] && channelDone[7] && channelDone[8] && dChannelDone)
-			{
+			{	
+				// final point check!
+				// ... if there are events to process at this final moment... process them here
+				
+				for(int i=0;i<9;i++)
+				{	
+					bool eventsDone = false;
+					while(!eventsDone)
+					{
+						// if next event in vector is set to happen at this frame pos, process
+						if( (eventIndex[i] < data[i].nEvents) )
+						{
+							processEvent(i, data[i].eventType[eventIndex[i]], data[i].eventParam[eventIndex[i]]);
+							eventIndex[i]++;
+						}
+						else
+							eventsDone = true;
+					}
+				}
+				
+				// process drum events pending at the final point before loop
+				bool eventsDone = false;
+				while(!eventsDone)
+				{
+					// if next event in vector is set to happen at this frame pos, process
+					if( (dEventIndex < ddata.nEvents) )
+					{
+						processDrumEvent(ddata.eventType[dEventIndex], ddata.eventParam[dEventIndex]);
+						dEventIndex++;
+					}
+					else
+						eventsDone = true;
+				}
+				
 				if(loopEnabled)
 				{
+					cout << "Looping back to beginning...\n";
 					// enable channels again
 					enableChannels(true, true, true, true, true, true, true, true, true, true);
 
@@ -3591,6 +4996,21 @@ int MPlayer::playerCallback (
 
 					// go back to the beginning
 					goToBeginning();
+				}
+				else if(!loopEnabled && repeatsRemaining > 1) // if repeat times is left.. process
+																// when set to 1, it's last time
+				{
+					repeatsRemaining--;
+					cout << "Back to beginning... repeats remaining = " << repeatsRemaining << endl;
+					
+					// enable channels again
+					enableChannels(true, true, true, true, true, true, true, true, true, true);
+
+					// enable drum channel
+					enableDrumChannel();
+
+					// go back to the beginning
+					goToBeginning();					
 				}
 			}
 
@@ -3641,8 +5061,20 @@ int MPlayer::playerCallback (
 
 ////////////////////////////////////////////////////////
 
+// portaudio stream has been dropped! ... attempt to reopen stream...
+void MPlayer::playerStoppedCallback ()
+{
+	cout << "Stream finished callback called! step 2 :)\n";
+	if(!appIsExiting)
+		restartStream();
+}
+
+////////////////////////////////////////////////////////
+
 MPlayer::MPlayer()
 {
+	appIsExiting = false; // when this is true, paStreamFinishedCallback will NOT automatically reopen stream
+	
 	for(int i=0;i<9;i++)
 		silenced[i] = false;
 
@@ -3654,8 +5086,8 @@ MPlayer::MPlayer()
 		osc[0].detune = 0;
 
 	tableType = 1; // OSC's default type - square table
-	masterGain = 0.8f;
-	masterOutCap = 0.85f;
+	masterGain = 0.7f;
+	masterOutCap = 0.88f;
 
 	compThreshold = 0.5f;
 	compRatio = 8;
@@ -3664,6 +5096,9 @@ MPlayer::MPlayer()
 	songLastFrame = 0;
 	songLastFramePure = 0;
 	bookmark = 0;
+	for(int i=0; i<9; i++)
+		eventIndex[i] = 0;
+	dEventIndex = 0;
 
 	// call this function once to set various parameters settings to default
 	resetForNewSong();
@@ -3719,11 +5154,74 @@ void MPlayer::initialize()
               this // pass this class to callback
 		);
 	if( err != paNoError ) handlePaError( err );
+	
+	// set up callback to be called in case stream gets intrrupted
+	err = Pa_SetStreamFinishedCallback( &stream, paStoppedCallback );
 
 	// start port audiostream
     err = Pa_StartStream( stream );
 }
 
+// this method should be used if portaudio drops off and stops its stream
+void MPlayer::restartStream()
+{
+	if(appIsExiting)
+	{
+		cout << "pa stream restart requested, but app is exiting...\n(will not restart audio stream)\n";
+		return;
+	}
+	
+	// specifically stop stream first (as user guide recommends it)
+	err = Pa_StopStream( stream );
+	
+	// open port audio stream
+    err = Pa_OpenStream(
+              &stream,
+              NULL, /* no input */
+              &outputParameters,
+              SAMPLE_RATE,
+              FRAMES_PER_BUFFER,
+              paClipOff,      /* we won't output out of range samples so don't bother clipping them */
+              paCallback,	// the name of port audio callback function
+              this // pass this class to callback
+		);
+	if( err != paNoError ) handlePaError( err );
+	
+	err = Pa_StartStream( stream );
+	if( err != paNoError ) handlePaError( err );
+	else
+		cout << "portaudio stream restarted - success!\n";
+}
+
+// DEBUG
+void MPlayer::stopStream()
+{
+	err = Pa_StopStream( stream );
+	cout << "requesting portaudio to stop stream...\n";
+}
+
+// 
+void MPlayer::declareAppTermination()
+	{ appIsExiting = true; }
+
+// utility function - query portaudio stream state
+std::string MPlayer::getStreamStateString()
+{
+	err = Pa_IsStreamStopped( stream );
+	std::string strError = Pa_GetErrorText(err);
+	return strError;
+}
+
+// return portaudio stream state in boolean (success is true)
+bool MPlayer::getStreamState()
+{
+	err = Pa_IsStreamStopped( stream );
+	if(err==0)
+		return true;
+	else
+		return false;
+}
+	
 // function to set back to default before loading new song (or 'play' current song again)
 // reset all oscillator + delay settings etc. - before parsing source
 void MPlayer::resetForNewSong()
@@ -3731,10 +5229,17 @@ void MPlayer::resetForNewSong()
 	// loop is enabled by default
 	loopEnabled = true;
 	
+	// repeat counts - Note: repeating is OFF if loop is enabled
+	repeatsRemaining = 1;
+	
 	// reset frame info for now (in case you're starting a new empty file)
 	songLastFrame = 0;
 	songLastFramePure = 0;
 	songFinished = true;
+	
+	// initialize oscillators for first note (so that if starting song with rest, OSC is muted)
+	//for(int i=0; i<9; i++)
+	//	osc[i].initializeForFirstNote();
 
 	// clear delay buffer
 	delay[0].clearBuffer(); // left delay
@@ -3750,13 +5255,28 @@ void MPlayer::resetForNewSong()
 	for(int i=0; i<9; i++)
 	{
 		// back to default envelope setting
+		osc[i].setTable(1); // back to square wave
+		osc[i].refreshForSongBeginning();
 		osc[i].setEnvelope(22, 18, 250, 40, 0.9f, 0.5f);
 		enableChannel(i);
 		disableAstro(i);
 		osc[i].disableLFO();
+		osc[i].initializeLFO(); // resets lfo parameters
 		osc[i].detune = 0;
+		osc[i].setRiseToDefault();
+		osc[i].setFallToDefault();
+		osc[i].disableBeefUp();
+		osc[i].setBeefUpFactor(1.0f);
+		ringModEnabled[i] = false; // start with ring modulation cleared
+		ringModFeed[i] = -1; // -1 means no feeder channel
+		ringModMute[i] = false;
+		osc[i].resetYFlip();
 	}
 	enableDrumChannel();
+	nosc.resetDrumTones();
+	nosc.disableBeefUp();
+	nosc.setBeefUpFactor(1.0f);
+	// nosc.useWhiteNoise();
 
 	// clear all osc history data used for meter visualization
 	for(int i=0; i<9; i++)
@@ -3821,6 +5341,7 @@ void MPlayer::goToBeginning()
 		remainingFrames[i] = 0;
 		freqNote[i] = 0;
 		noteIndex[i] = 0;
+		eventIndex[i] = 0;
 	}
 
 	// for drum channel
@@ -3828,54 +5349,43 @@ void MPlayer::goToBeginning()
 	dRemainingFrames = 0;
 	currentDrumNote = 0;
 	dNoteIndex = 0;
-
+	dEventIndex = 0;
+	
 	// set the starting note for each music channel (ch 1 to 9)
 	for(int i=0; i<9; i++)
 	{
 		// if there are event requests (freq >= 70000), digest those first
 		bool eventsDone = false;
-
+		
 		while(!eventsDone)
 		{
-			int readValue = static_cast<int>(data[i].freqNote[noteIndex[i]]);
-			if(readValue==70000.0) // 'specify volume'
+			// if next event in vector is set to happen at this frame pos, process
+			if( (data[i].eventFrame[eventIndex[i]] == 0) && (eventIndex[i] < data[i].nEvents) )
 			{
-				// convert the passed value(1-10) to float (0.0 to 0.5f)
-				float gainToSet
-					= static_cast<float>(data[i].param[noteIndex[i]]) / 20.0f;
-				setChannelGain(i, gainToSet);
-				noteIndex[i]++;
+				processEvent(i, data[i].eventType[eventIndex[i]], 
+								data[i].eventParam[eventIndex[i]]);
+				eventIndex[i]++;
 			}
-			else if(readValue==71000.0) // 'increment volume'
-			{
-				float gainToSet = min(0.5f, getChannelGain(i)+0.05f);
-				setChannelGain(i, gainToSet);
-				noteIndex[i]++;
-			}
-			else if(readValue==72000.0) // 'decrement volume'
-			{
-				float gainToSet = max(0.001f, getChannelGain(i)-0.05f);
-				setChannelGain(i, gainToSet);
-				noteIndex[i]++;
-			}
-			else // next freq value is not any event request, so we're done here
+			else
 				eventsDone = true;
 		}
 
 		remainingFrames[i] = data[i].len[noteIndex[i]];
 		freqNote[i] = data[i].freqNote[noteIndex[i]];
-		setNewNote(i, freqNote[i]);
 
-		// if this is a rest (freq = 65535), silence channel
+		// if very first note is a rest (freq = 65535), silence channel
 		if(freqNote[i]==65535.0)
 		{
 			setToRest(i); // set this channel to rest
+			osc[i].confirmFirstNoteIsRest();
 		}
 		else if(freqNote[i]<0) // if first note is already end flag (empty MML data)
 		{
 			channelDone[i] = true;
 			disableChannel(i);
 		}
+		else // otherwise, we have a legit note! go ahead and set to play that note
+			setNewNote(i, freqNote[i]);
 	}
 
 	// handle drum channel!
@@ -3884,31 +5394,16 @@ void MPlayer::goToBeginning()
 
 	// if there are event requests (freq >= 70000), digest those first
 	bool eventsDone = false;
-
+	
 	while(!eventsDone)
 	{
-		int readValue = ddata.drumNote[dNoteIndex];
-		if(readValue==70000) // 'specify volume'
+		// if next event in vector is set to happen at this frame pos, process
+		if( (ddata.eventFrame[dEventIndex] == 0) && (dEventIndex < ddata.nEvents) )
 		{
-			// convert the passed value(1-10) to float (0.0 to 0.5f)
-			float gainToSet
-				= static_cast<float>(ddata.param[dNoteIndex]) / 20.0f;
-			setDChannelGain(gainToSet);
-			dNoteIndex++;
+			processDrumEvent(ddata.eventType[dEventIndex], ddata.eventParam[dEventIndex]);
+			dEventIndex++;
 		}
-		else if(readValue==71000) // 'increment volume'
-		{
-			float gainToSet = min(0.5f, getDChannelGain()+0.05f);
-			setDChannelGain(gainToSet);
-			dNoteIndex++;
-		}
-		else if(readValue==72000) // 'decrement volume'
-		{
-			float gainToSet = max(0.001f, getDChannelGain()-0.05f);
-			setDChannelGain(gainToSet);
-			dNoteIndex++;
-		}
-		else // next freq value is not any event request, so we're done here
+		else
 			eventsDone = true;
 	}
 
@@ -3965,6 +5460,10 @@ long MPlayer::getSongLastFramePure()
 	return maxLen;
 }
 
+// returns the current framePos (where player's position in music)
+long MPlayer::getFramePos()
+	{ return framePos; }
+
 // checks if player is currently playing
 bool MPlayer::isPlaying()
 	{ return playing; }
@@ -3985,6 +5484,30 @@ void MPlayer::setAstro(int channel, int nCyclesPerSecond)
 
 void MPlayer::disableAstro(int channel)
 	{ osc[channel].disableAstro(); }
+	
+void MPlayer::enableRingMod(int channel, int modulatorChannel)
+{
+	ringModEnabled[channel] = true; // turn on ring modulation for this channel
+	ringModFeed[channel] = modulatorChannel; // assign the modulator/feeder channel
+	ringModMute[modulatorChannel] = true; // feeder channel should be muted in main mix
+}
+
+void MPlayer::disableRingMod(int channel)
+{
+	bool found = false;
+	int searchChannel = ringModFeed[channel]; // do search for - currently assigned modulator for this channel
+	ringModFeed[channel] = -1; // -1 to clear target for this channel to begin...
+	int channelToCheck = ringModFeed[channel]; // check for the assigned modulator channel
+												// if it's not by any other channel, then we can REVIVE the modulator
+	for(int i=0; i<9; i++)
+	{
+		if( ringModFeed[i] == searchChannel )
+			found = true;
+	}
+	if(!found) // if no other channel has to keep using this modulator that has been used by this channel
+		ringModMute[searchChannel] = false; // revive this feeder channel - comes alive in mix again!
+	ringModEnabled[channel] = false; // then disable ring modulation for this channel
+}
 
 void MPlayer::setNewNote(int channel, double freq)
 {
@@ -4066,6 +5589,9 @@ void MPlayer::enableLooping()
 void MPlayer::disableLooping()
 	{ loopEnabled = false; }
 	
+void MPlayer::setRepeatsRemaining(int value)
+	{ repeatsRemaining = value; }
+	
 void MPlayer::advance()
 {
 	// advance each music oscillator
@@ -4087,8 +5613,10 @@ float MPlayer::getMix(int channel)
 	// mix all 9 channels
 	for(int i=0; i<9; i++)
 	{
-		if(enabled[i] && silenced[i] == false)
+		if(enabled[i] && silenced[i] == false && !ringModEnabled[i] && !ringModMute[i])
 			mix += compress(osc[i].getOutput());
+		else if(ringModEnabled[i] && enabled[i] && silenced[i] == false && ringModFeed[i]!=-1)
+			mix += compress(osc[i].getOutput() * osc[ringModFeed[i]].getOutput());
 	}
 
 	// mix drum channel, too
@@ -4174,6 +5702,410 @@ void MPlayer::setMasterGain(float g)
 	{ masterGain = g; }
 
 
+// process one event at current frame for a specified channel
+void MPlayer::processEvent(int channel, int eType, int eParam)
+{
+	// cout << "Event: ch=" << channel << " type=" << eType << " param=" << eParam << "\t";
+
+	// -1 is end of event series for the channel
+	if(eType==-1)
+	{
+		// cout << "Channel " << channel << ": end of events!\n";
+	}
+	
+	// type 0 - specify the volume
+	else if(eType==0)
+	{
+		// convert the passed value(1-10) to float (0.0 to 0.5f)
+		float gainToSet
+			= static_cast<float>(eParam) / 20.0f;
+		setChannelGain(channel, gainToSet);
+		// cout << "VOLUME=" << eParam << endl;
+	}
+	// type 1 - increment volume
+	else if(eType==1)
+	{
+		float gainToSet = min(0.5f, getChannelGain(channel)+0.05f);
+		setChannelGain(channel, gainToSet);		
+		cout << "channel " << channel << " VOLUME++ new gain=" << gainToSet << "\n";
+	}
+	// type 2 - decrement volume
+	else if(eType==2)
+	{
+		float gainToSet = max(0.001f, getChannelGain(channel)-0.05f);
+		setChannelGain(channel, gainToSet);
+		cout << "channel " << channel << " VOLUME-- new gain=" << gainToSet << "\n";
+	}
+	// type 10 - set waveform 
+	else if(eType==10)
+	{
+		osc[channel].setTable(eParam); // set wavetable for this value
+		// cout << "WAVEFORM=" << eParam << endl;
+	}
+	// type 11 - flip waveform vertically (helpful for pulse waves etc.)
+	else if(eType==11)
+	{
+		osc[channel].flipYAxis(); // set flipping status to INVERTED
+		cout << "channel " << channel << " - WAVEFLIP" << endl;
+	}
+	// type 1000 - "DEFAULTTONE"
+	else if(eType==1000)
+	{
+		osc[channel].setTable(1); // square wave
+		osc[channel].setEnvelope(0, 0, 0, 0, 0.65f, 0.65f);
+		// cout << "DEFAULTTONE\n";
+	}
+	// type 1001 - "PRESET=BEEP"
+	else if(eType==1001)
+	{
+		osc[channel].setTable(1); // square wave
+		osc[channel].setEnvelope(0, 0, 0, 0, 0.65f, 0.65f);
+		// cout << "PRESET=BEEP\n";
+	}
+	// type 1002 - "PRESET=POPPY"
+	else if(eType==1002)
+	{
+		osc[channel].setTable(1); // square wave
+		osc[channel].setEnvelope(0, 50, 10, 50, 0.90f, 0.40f);
+		// cout << "PRESET=POPPY\n";
+	}
+	// type 1002 - "PRESET=POPPYVIB"
+	else if(eType==1003)
+	{
+		osc[channel].setTable(1); // square wave
+		osc[channel].setEnvelope(0, 50, 10, 50, 0.90f, 0.40f);
+		osc[channel].enableLFO();
+		osc[channel].setLFOrange(22);
+		osc[channel].setLFOwaitTime(250);
+		osc[channel].setLFOspeed(6.0);
+		// cout << "PRESET=POPPYVIB\n";
+	}
+	// type 1003 - "PRESET=BELL"
+	else if(eType==1004)
+	{
+		osc[channel].setTable(1); // square wave
+		osc[channel].setEnvelope(0, 0, 800, 0, 0.80f, 0.0f);
+		// cout << "PRESET=BELL\n";
+	}
+	// type 20 - "ATTACKTIME="
+	else if(eType==20)
+	{
+		osc[channel].setAttackTime(eParam); // set attack time to this value
+		// cout << "ATTACKTIME=" << eParam << endl;
+	}
+	// type 21 - "PEAKTIME="
+	else if(eType==21)
+	{
+		osc[channel].setPeakTime(eParam); // set peak time to this value
+		// cout << "PEAKTIME=" << eParam << endl;
+	}
+	// type 22 - "DECAYTIME="
+	else if(eType==22)
+	{
+		osc[channel].setDecayTime(eParam); // set decay time to this value
+		// cout << "DECAYTIME=" << eParam << endl;
+	}
+	// type 23 - "RELEASETIME="
+	else if(eType==23)
+	{
+		osc[channel].setReleaseTime(eParam); // set release time to this value
+		// cout << "RELEASETIME=" << eParam << endl;
+	}
+	// type 24 - "PEAKLEVEL="
+	else if(eType==24)
+	{
+		float valuef = static_cast<float>(eParam) / 100.0f;
+		osc[channel].setPeakLevel(valuef); // set peak level to this value
+		// cout << "PEAKLEVEL=" << eParam << endl; 
+	}
+	// type 25 - "SUSTAINLEVEL="
+	else if(eType==25)
+	{
+		float valuef = static_cast<float>(eParam) / 100.0f;
+		osc[channel].setSustainLevel(valuef); // set sustain level to this value
+		// cout << "SUSTAINLEVEL=" << eParam << endl;
+	}
+	// type 30 - "LFO=ON/OFF"
+	else if(eType==30)
+	{
+		if(eParam==1)
+		{
+			osc[channel].enableLFO();
+			// cout << "LFO=ON\n";
+		}
+		else if(eParam==0)
+		{
+			osc[channel].disableLFO();
+			// cout << "LFO=ON\n";
+		}
+	}
+	// type 31 - "LFORANGE="
+	else if(eType==31)
+	{
+		osc[channel].setLFOrange(eParam); // set LFO range to this value
+		// cout << "LFORANGE=" << eParam << endl;
+	}
+	// type 32 - "LFOSPEED="
+	else if(eType==32)
+	{
+		double valued = static_cast<double>(eParam);
+		osc[channel].setLFOspeed(valued); // set LFO speed to this value
+		// cout << "LFOSPEED=" << eParam << endl;
+	}
+	// type 33 - "LFOWAIT="
+	else if(eType==33)
+	{
+		osc[channel].setLFOwaitTime(eParam); // set LFO wait time to this value
+		// cout << "LFOWAIT=" << eParam << endl;
+	}
+	// type 40 - "ASTRO="
+	else if(eType==40)
+	{
+		if(eParam==0)
+		{
+			disableAstro(channel);
+		}
+		else
+			setAstro(channel, eParam); // set astro to this value
+		// cout << "ASTRO=" << eParam << endl;
+	}
+	// type 41 - "ASTRO=OFF"
+	else if(eType==41)
+	{
+		disableAstro(channel);
+		// cout << "ASTRO=OFF" << endl;
+	}
+	// type 50 - "FALL"
+	else if(eType==50)
+	{
+		osc[channel].startFall();
+		// cout << "FALL!" << endl;
+	}
+	// type 51 - "FALLSPEED="
+	else if(eType==51)
+	{
+		double valued = static_cast<double>(eParam);
+		osc[channel].setFallSpeed(valued); // set LFO speed to this value
+		// cout << "FALLSPEED=" << eParam << endl;
+	}
+	// type 52 - "FALLWAIT="
+	else if(eType==52)
+	{
+		double valued = static_cast<double>(eParam);
+		osc[channel].setFallWait(valued); // set LFO speed to this value
+		// cout << "FALLWAIT=" << eParam << endl;
+	}
+	// type 60 - "RISE"
+	else if(eType==60)
+	{
+		osc[channel].startRise();
+		// cout << "RISE!" << endl;
+	}
+	// type 61 - "RISESPEED="
+	else if(eType==61)
+	{
+		double valued = static_cast<double>(eParam);
+		osc[channel].setRiseSpeed(valued); // set LFO speed to this value
+		// cout << "RISESPEED=" << eParam << endl;
+	}
+	// type 62 - "RISERANGE="
+	else if(eType==62)
+	{
+		double valued = static_cast<double>(eParam);
+		osc[channel].setRiseRange(valued); // set LFO speed to this value
+		// cout << "RISERANGE=" << eParam << endl;
+	}
+	// type 70 - "BEEFUP="
+	else if(eType==70)
+	{
+		cout << "BEEFUP=" << eParam << endl;
+		double valuef = static_cast<float>(eParam);
+		if(eParam<0.1f) // if zero, turn off beef-up
+		{
+			osc[channel].disableBeefUp();
+			cout << "BEEFUP disabled!\n";
+		}
+		else
+		{
+			osc[channel].enableBeefUp();
+			osc[channel].setBeefUpFactor( (valuef*3.0f/100.0f) + 1.0f ); // set BEEFUP to this value
+		}
+	}
+	// type 80 - "RINGMOD="
+	else if(eType==80)
+	{
+		cout << "channel " << channel << " - RINGMOD = " << eParam << endl;
+		if(eParam==0) // if 0 is passed, turn OFF
+		{
+			cout << "RINGMOD=OFF, channel = " << channel << endl;
+			disableRingMod(channel); // stop ring modulation for this channel now
+		}
+		else if(eParam >= 1) // if 1 or bigger is passed, assign ring modulator channel
+			enableRingMod(channel, eParam-1); // start ring modulation for this channel now
+											// the passed parameter is the modulator/feeder channel number
+		
+	}
+	// type 81 - "RINGMOD=OFF"
+	else if(eType==81)
+	{
+		cout << "RINGMOD=OFF, channel = " << channel << endl;
+		disableRingMod(channel); // stop ring modulation for this channel now
+	}
+}
+
+
+// process one event at current frame for a specified channel
+void MPlayer::processDrumEvent(int eType, int eParam)
+{
+	// cout << "Event: Drums type=" << eType << "\t";
+
+	// -1 is end of event series for the channel
+	if(eType==-1)
+	{
+		// cout << "Drum channel : end of events!\n";
+	}
+	
+	// type 0 - specify the volume
+	else if(eType==0)
+	{
+		// convert the passed value(1-10) to float (0.0 to 0.5f)
+		float gainToSet
+			= static_cast<float>(eParam) / 20.0f;
+		setDChannelGain(gainToSet);	
+		// cout << "VOLUME=" << eParam << endl;
+	}
+	// type 1 - increment volume
+	else if(eType==1)
+	{
+		float gainToSet = min(0.5f, getDChannelGain()+0.05f);
+		setDChannelGain(gainToSet);		
+		// cout << "VOLUME++\n";
+	}
+	// type 2 - decrement volume
+	else if(eType==2)
+	{
+		float gainToSet = max(0.001f, getDChannelGain()-0.05f);
+		setDChannelGain(gainToSet);
+		// cout << "VOLUME--\n";
+	}
+	// type 500 - reset all drum settings
+	else if(eType==500)
+	{
+		nosc.resetDrumTones();
+		cout << "RESETDRUMS\n";
+	}
+	// type 510 - tune kick
+	// passed value = 0 to 100 (scale), set to freq ranging between 50 and 350hz
+	else if(eType==510)
+	{
+		double tuneFreq = (static_cast<double>(eParam) / 100.0) * 300.0 + 50.0;
+		nosc.tuneKick(tuneFreq);
+		cout << "KICKPITCH - " << eParam << "%, " << tuneFreq << "hz\n";
+	}
+	// type 511 - tune snare
+	// passed value = 0 to 100 (scale), set to freq ranging between 200 and 1240hz
+	else if(eType==511)
+	{
+		double tuneFreq = (static_cast<double>(eParam) / 100.0) * 1040.0 + 200.0;
+		nosc.tuneSnare(tuneFreq);
+		cout << "SNAREPITCH - " << eParam << "%, " << tuneFreq << "hz\n";
+	}
+	// type 512 - tune HiHat
+	// passed value = 0 to 100 (scale), set to freq ranging between 1200 and 3600hz
+	else if(eType==512)
+	{
+		double tuneFreq = (static_cast<double>(eParam) / 100.0) * 2400.0 + 1200.0;
+		nosc.tuneHiHat(tuneFreq);
+		cout << "HIHATPITCH - " << eParam << "%, " << tuneFreq << "hz\n";
+	}
+	// type 520 - "BEEFUP="
+	else if(eType==520)
+	{
+		cout << "Drum BEEFUP=" << eParam << endl;
+		double valuef = static_cast<float>(eParam);
+		if(eParam<0.1f) // if zero, turn off beef-up
+		{
+			nosc.disableBeefUp();
+			cout << "Drum - BEEFUP disabled!\n";
+		}
+		else
+		{
+			nosc.enableBeefUp();
+			nosc.setBeefUpFactor( (valuef*1.6f/100.0f) + 1.0f ); // set BEEFUP to this value
+		}
+	}
+	// type 530 - use white noise
+	else if(eType==530)
+	{
+		nosc.useWhiteNoise();
+		cout << "WHITENOISE - All drums\n";
+	}
+	// type 531 - use pink noise
+	else if(eType==531)
+	{
+		nosc.usePinkNoise();
+		cout << "PINKNOISE - All drums\n";
+	}
+	// type 532 - set kick noise type
+	else if(eType==532)
+	{
+		nosc.setKickNoiseType(eParam);
+		cout << "set kick noise type =" << eParam << "\n";
+	}
+	// type 533 - set snare noise type
+	else if(eType==533)
+	{
+		nosc.setSnareNoiseType(eParam);
+		cout << "set snare noise type =" << eParam << "\n";
+	}
+	// type 534 - set hihat noise type
+	else if(eType==534)
+	{
+		nosc.setHiHatNoiseType(eParam);
+		cout << "set hihat noise type =" << eParam << "\n";
+	}
+	// type 540 - set kick length
+	// passed value = 0 to 400 (milliseconds), set to int value ranging between 0 and 400 msec
+	else if(eType==540)
+	{
+		nosc.setKickLength(eParam);
+		cout << "KICKLENGTH - " << eParam << "msec\n";
+	}
+	// type 541 - set snare length
+	// passed value = 0 to 1000 (milliseconds), set to int value ranging between 0 and 1000 msec
+	else if(eType==541)
+	{
+		nosc.setSnareLength(eParam);
+		cout << "SNARELENGTH - " << eParam << "msec\n";
+	}
+	// type 542 - set hihat length
+	// passed value = 0 to 1000 (milliseconds), set to int value ranging between 0 and 1000 msec
+	else if(eType==542)
+	{
+		nosc.setHiHatLength(eParam);
+		cout << "HIHATLENGTH - " << eParam << "msec\n";
+	}
+	// type 550 - set square wave element mix level (default is 100 = 1.0f)
+	// passed value = 0 to 100 (percent), set to float value ranging between 0 and 1.0f
+	else if(eType==550)
+	{
+		float valuef = static_cast<float>(eParam) / 100.0f;
+		nosc.setSquareLevel(valuef);
+		cout << "SQUARELEVEL - " << eParam << "%, passing value = " << valuef << "\n";
+	}
+	// type 551 - set noise element mix level (default is 100 = 1.0f)
+	// passed value = 0 to 100 (percent), set to float value ranging between 0 and 1.0f
+	else if(eType==551)
+	{
+		float valuef = static_cast<float>(eParam) / 100.0f;
+		nosc.setNoiseLevel(valuef);
+		cout << "NOISELEVEL - " << eParam << "%, passing value = " << valuef << "\n";
+	}
+}
+
+	
+
+
 /*----------
 
 std::string MPlayer::exportToFile(string filename)
@@ -4227,7 +6159,7 @@ std::string MPlayer::exportToFile(string filename)
 			currentSongFrame += read;
 
 			// if reached end of song, will get out of loop and finish
-			if(currentSongFrame >= songFrameLen)
+			if(framePos >= songFrameLen)
 				done = true;
 
 			write = lame_encode_buffer_interleaved_ieee_float
@@ -4273,10 +6205,10 @@ std::string MPlayer::exportToFile(string filename)
 			int nFramesWritten = fillExportBuffer(sndBuffer, writeChunkSize, currentFrame, songFrameLen);
 
 			// write to file just this much
-			// int framesWrittenFile = sf_writef_float(sndFile, sndBuffer, writeChunkSize);
+			int framesWrittenFile = sf_writef_float(sndFile, sndBuffer, writeChunkSize);
 
-			currentFrame += nFramesWritten; // update current position
-			if(currentFrame >= songFrameLen) // reached end...
+			// currentFrame += nFramesWritten; // update current position
+			if(framePos >= songFrameLen) // reached end...
 				done = true;
 		}
 
@@ -4326,42 +6258,29 @@ int MPlayer::fillExportBuffer(float* buffer, int framesToWrite, long startFrame,
 		{
 			if(!channelDone[i])
 			{
+				
+				// if there are event requests, digest those first
+				bool eventsDone = false;
+				
+				while(!eventsDone)
+				{
+					// if next event in vector is set to happen at this frame pos, process
+					if( (data[i].eventFrame[eventIndex[i]] <= framePos) && (eventIndex[i] < data[i].nEvents) )
+					{
+						processEvent(i, data[i].eventType[eventIndex[i]], 
+										data[i].eventParam[eventIndex[i]]);
+						eventIndex[i]++;
+					}
+					else
+						eventsDone = true;
+				}	
+				
 				remainingFrames[i]--;
 				if(remainingFrames[i] <= 0)
 				{
 					noteIndex[i]++;
 
 					// cout << "Frame " << framePos << " channel " << i << " - note index = " <<  noteIndex[i];
-
-					// if there are event requests (freq >= 70000), digest those first
-					bool eventsDone = false;
-
-					while(!eventsDone)
-					{
-						int readValue = static_cast<int>(data[i].freqNote[noteIndex[i]]);
-						if(readValue==70000.0) // 'specify volume'
-						{
-							// convert the passed value(1-10) to float (0.0 to 0.5f)
-							float gainToSet
-								= static_cast<float>(data[i].param[noteIndex[i]]) / 20.0f;
-							setChannelGain(i, gainToSet);
-							noteIndex[i]++;
-						}
-						else if(readValue==71000.0) // 'increment volume'
-						{
-							float gainToSet = min(0.5f, getChannelGain(i)+0.05f);
-							setChannelGain(i, gainToSet);
-							noteIndex[i]++;
-						}
-						else if(readValue==72000.0) // 'decrement volume'
-						{
-							float gainToSet = max(0.001f, getChannelGain(i)-0.05f);
-							setChannelGain(i, gainToSet);
-							noteIndex[i]++;
-						}
-						else // next freq value is not any event request, so we're done here
-							eventsDone = true;
-					}
 
 					// and if you get to the end of MML signal (freq = -1.0), set flag
 					if(data[i].freqNote[noteIndex[i]] < 0)
@@ -4389,40 +6308,26 @@ int MPlayer::fillExportBuffer(float* buffer, int framesToWrite, long startFrame,
 		// now handle drum channel!
 		if(!dChannelDone)
 		{
+			
+			// if there are event requests, digest those first
+			bool eventsDone = false;
+			
+			while(!eventsDone)
+			{
+				// if next event in vector is set to happen at this frame pos, process
+				if( (ddata.eventFrame[dEventIndex] <= framePos) && (dEventIndex < ddata.nEvents) )
+				{
+					processDrumEvent(ddata.eventType[dEventIndex], ddata.eventParam[dEventIndex]);
+					dEventIndex++;
+				}
+				else
+					eventsDone = true;
+			}
+			
 			dRemainingFrames--;
 			if(dRemainingFrames <= 0)
 			{
 				dNoteIndex++; // move onto the next drum note index
-
-					// if there are event requests (freq >= 70000), digest those first
-					bool eventsDone = false;
-
-					while(!eventsDone)
-					{
-						int readValue = ddata.drumNote[dNoteIndex];
-						if(readValue==70000) // 'specify volume'
-						{
-							// convert the passed value(1-10) to float (0.0 to 0.5f)
-							float gainToSet
-								= static_cast<float>(ddata.param[dNoteIndex]) / 20.0f;
-							setDChannelGain(gainToSet);
-							dNoteIndex++;
-						}
-						else if(readValue==71000) // 'increment volume'
-						{
-							float gainToSet = min(0.5f, getDChannelGain()+0.05f);
-							setDChannelGain(gainToSet);
-							dNoteIndex++;
-						}
-						else if(readValue==72000) // 'decrement volume'
-						{
-							float gainToSet = max(0.001f, getDChannelGain()-0.05f);
-							setDChannelGain(gainToSet);
-							dNoteIndex++;
-						}
-						else // next freq value is not any event request, so we're done here
-							eventsDone = true;
-					}
 
 				// and if you get to the end of MML signal (drumNote = -1.0), set flag
 				if(ddata.drumNote[dNoteIndex] < 0 || dNoteIndex >= ddata.getSize())
@@ -4445,6 +6350,65 @@ int MPlayer::fillExportBuffer(float* buffer, int framesToWrite, long startFrame,
 				}
 			}
 		}
+
+		
+		// if all channels have reached end... and loop is enabled, go back to beginning
+		if(	channelDone[0] && channelDone[1] && channelDone[2] &&
+			channelDone[3] && channelDone[4] && channelDone[5] &&
+			channelDone[6] && channelDone[7] && channelDone[8] && dChannelDone)
+		{
+			
+			// final point check!
+			// ... if there are events to process at this final moment... process them here
+			
+			for(int i=0;i<9;i++)
+			{
+				bool eventsDone = false;
+				while(!eventsDone)
+				{
+					// if next event in vector is set to happen at this frame pos, process
+					if( (eventIndex[i] < data[i].nEvents) )
+					{
+						processEvent(i, data[i].eventType[eventIndex[i]], data[i].eventParam[eventIndex[i]]);
+						eventIndex[i]++;
+					}
+					else
+						eventsDone = true;
+				}
+			}
+			
+			// process drum events pending at the final point before loop
+			bool eventsDone = false;
+			while(!eventsDone)
+			{
+				// if next event in vector is set to happen at this frame pos, process
+				if( (dEventIndex < ddata.nEvents) )
+				{
+					processDrumEvent(ddata.eventType[dEventIndex], ddata.eventParam[dEventIndex]);
+					dEventIndex++;
+				}
+				else
+					eventsDone = true;
+			}			
+			
+			
+			if(repeatsRemaining > 1) // if repeat times is left.. process
+															// when set to 1, it's last time
+			{
+				repeatsRemaining--;
+				cout << "Back to beginning... repeats remaining = " << repeatsRemaining << endl;
+				
+				// enable channels again
+				enableChannels(true, true, true, true, true, true, true, true, true, true);
+
+				// enable drum channel
+				enableDrumChannel();
+
+				// go back to the beginning
+				goToBeginning();					
+			}
+		}		
+		
 
 		// if song is not finished, update frame position - advance player
 		if(!writeFinished)
@@ -4534,38 +6498,25 @@ void MPlayer::seek(long destination)
 			// zap through until very last note before the seekpoint
 			// including events
 			
+			// first process all the events up to destination
+			bool eventsZappingDone = false;
+			while(!eventsZappingDone)
+			{
+				// if next event in vector is set to happen at this frame pos, process
+				if( (data[i].eventFrame[eventIndex[i]] <= destination) && (eventIndex[i] < data[i].nEvents) )
+				{
+					processEvent(i, data[i].eventType[eventIndex[i]], 
+									data[i].eventParam[eventIndex[i]]);
+					eventIndex[i]++;
+				}
+				else
+					eventsZappingDone = true;
+			}
+			
 			bool zappingDone = false;
 			
 			while(!zappingDone)
 			{
-					bool eventsAtThisPosDone = false;
-					
-					while(!eventsAtThisPosDone)
-					{
-						int readValue = static_cast<int>(data[i].freqNote[noteIndex[i]]);
-						if(readValue==70000.0) // 'specify volume'
-						{
-							// convert the passed value(1-10) to float (0.0 to 0.5f)
-							float gainToSet
-								= static_cast<float>(data[i].param[noteIndex[i]]) / 20.0f;
-							setChannelGain(i, gainToSet);
-							noteIndex[i]++;
-						}
-						else if(readValue==71000.0) // 'increment volume'
-						{
-							float gainToSet = min(0.5f, getChannelGain(i)+0.05f);
-							setChannelGain(i, gainToSet);
-							noteIndex[i]++;
-						}
-						else if(readValue==72000.0) // 'decrement volume'
-						{
-							float gainToSet = max(0.001f, getChannelGain(i)-0.05f);
-							setChannelGain(i, gainToSet);
-							noteIndex[i]++;
-						}
-						else // next freq value is not any event request, so we're done here
-							eventsAtThisPosDone = true;
-					}
 
 				// if the next note is end signal, finish this channel
 				if(data[i].freqNote[noteIndex[i]] < 0)
@@ -4634,6 +6585,21 @@ void MPlayer::seek(long destination)
 
 			long seekPos = 0;
 			
+			// first process all the events up to destination
+			bool eventsZappingDone = false;
+
+			while(!eventsZappingDone)
+			{
+				// if next event in vector is set to happen at this frame pos, process
+				if( (ddata.eventFrame[dEventIndex] <= destination) && (dEventIndex < ddata.nEvents) )
+				{
+					processDrumEvent(ddata.eventType[dEventIndex], ddata.eventParam[dEventIndex]);
+					dEventIndex++;
+				}
+				else
+					eventsZappingDone = true;
+			}
+			
 			// for each music channel...
 			// zap through until very last note before the seekpoint
 			// including events
@@ -4642,34 +6608,6 @@ void MPlayer::seek(long destination)
 			
 			while(!zappingDone)
 			{
-					bool eventsAtThisPosDone = false;
-					
-					while(!eventsAtThisPosDone)
-					{
-						int readValue = static_cast<int>(ddata.drumNote[noteIndex[dNoteIndex]]);
-						if(readValue==70000.0) // 'specify volume'
-						{
-							// convert the passed value(1-10) to float (0.0 to 0.5f)
-							float gainToSet
-								= static_cast<float>(ddata.param[dNoteIndex]) / 20.0f;
-							setDChannelGain(gainToSet);
-							dNoteIndex++;
-						}
-						else if(readValue==71000.0) // 'increment volume'
-						{
-							float gainToSet = min(0.5f, getDChannelGain()+0.05f);
-							setDChannelGain(gainToSet);
-							dNoteIndex++;
-						}
-						else if(readValue==72000.0) // 'decrement volume'
-						{
-							float gainToSet = max(0.001f, getDChannelGain()-0.05f);
-							setDChannelGain(gainToSet);
-							dNoteIndex++;
-						}
-						else // next freq value is not any event request, so we're done here
-							eventsAtThisPosDone = true;
-					}
 
 				// if the next note is end signal, finish this channel
 				if(ddata.drumNote[dNoteIndex] < 0 || dNoteIndex >= ddata.getSize())
@@ -4682,8 +6620,11 @@ void MPlayer::seek(long destination)
 				// if not finished yet, advance note index.. til very last note before destination
 				if(!dChannelDone)
 				{
+					
+					long nextDNoteLen = static_cast<long>( ddata.len[dNoteIndex] );
+					
 					// if adding next note will cause to go past destination, stop here
-					if( ( seekPos + static_cast<long>(ddata.len[dNoteIndex]) ) >= destination )
+					if( ( seekPos + nextDNoteLen ) >= destination )
 					{
 						zappingDone = true;
 						// DEBUG

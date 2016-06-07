@@ -6,7 +6,7 @@
 
 using namespace std;
 
-const int OSC::OSC_TABLE_SIZE = 8192;
+const int OSC::OSC_TABLE_SIZE = 4096;
 const int OSC::ENV_TABLE_SIZE = 1024;
 const double OSC::OSC_SAMPLE_RATE = 44100.0;
 const float OSC::TWO_PI = 6.283185307;
@@ -15,7 +15,10 @@ OSC::OSC()
 {
 	table.resize(OSC_TABLE_SIZE); // wave table (vector)
 	
+	tableType = 0; // FORCE setTable() to rewrite wavetable
 	setTable(1); // default - set up a square table
+	tableType = 1;
+	yFlip = 1.0f;
 	phase = 0.0;
 	increment = 0.0;
 	freq = 10.0; // not to set to zero to safeguard
@@ -24,6 +27,7 @@ OSC::OSC()
 	gain = 0.5f; // default gain
 	
 	resting = false;
+	forceSilenceAtBeginning = false;
 	
 	nAttackFrames = 1000;
 	nPeakFrames = 1000;
@@ -44,6 +48,17 @@ OSC::OSC()
 	astroEnabled = false;
 	lfoEnabled = false;
 	
+	fallActive = false;
+	riseActive = false;
+	
+	beefUp = false;
+	beefUpFactor = 1.0f;
+	compRatio = 4.0f;
+	compThreshold = 0.90f;
+	
+	popGuardCount = 0;
+	lastAmp = 0.0f;
+	
 	// initialize history table
 	clearHistory();
 }
@@ -53,6 +68,17 @@ OSC::~OSC()
 
 void OSC::setTable(int type)
 {
+	// DEBUG
+	//if(tableType==type)
+	//	cout << "NO CHANGE TO WAVEFORM! YEY!!\n";
+	
+	// if requested type is the currently set type
+	// don't have to make any change... skip
+	if(tableType==type)
+		return;
+	
+	tableType = type;
+	
 	switch(type)
 	{
 		float maxAmp;
@@ -72,11 +98,11 @@ void OSC::setTable(int type)
 		
 			for(int i=0; i<OSC_TABLE_SIZE/2; i++)
 			{
-				table[i] = 0.85f;
+				table[i] = 0.80f;
 			}
 			for(int i=OSC_TABLE_SIZE/2; i<OSC_TABLE_SIZE; i++)
 			{
-				table[i] = -0.85f;
+				table[i] = -0.80f;
 			}
 			break;
 		
@@ -89,9 +115,16 @@ void OSC::setTable(int type)
 		// triangle wave
 		case 3:
 			for(int i=0; i<OSC_TABLE_SIZE/2; i++)
-				table[i] = -0.99f  + (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE/2)) * 1.98f;	
+			{
+				int index = OSC_TABLE_SIZE/4 + i;
+				table[index] = -0.99f  + (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE/2)) * 1.98f;
+			}				
 			for(int i=OSC_TABLE_SIZE/2; i<OSC_TABLE_SIZE; i++)
-				table[i] = 0.99f  - (static_cast<float>(i-OSC_TABLE_SIZE/2) / static_cast<float>(OSC_TABLE_SIZE/2)) * 1.98f;
+			{
+				int index = OSC_TABLE_SIZE/4 + i;
+				if(index>=OSC_TABLE_SIZE) index -= OSC_TABLE_SIZE;
+				table[index] = 0.99f  - (static_cast<float>(i-OSC_TABLE_SIZE/2) / static_cast<float>(OSC_TABLE_SIZE/2)) * 1.98f;
+			}
 			break;
 		
 		// sine wave with 3rd, 6th, 9th, 12th harmonics
@@ -164,12 +197,53 @@ void OSC::setTable(int type)
 			
 			break;
 
-		// default is sine wave...
-		default:
-			maxAmp = 0.99f;
-			for(int i=0; i<OSC_TABLE_SIZE; i++)
-				table[i] = sin( TWO_PI * (static_cast<float>(i) / static_cast<float>(OSC_TABLE_SIZE) ) ) * maxAmp;
+		// pulse wave 12.5%-87.5% ratio
+		case 6:
+			for(int i=0; i<OSC_TABLE_SIZE/8; i++)
+			{
+				table[i] = -0.80f;
+			}
+			for(int i=OSC_TABLE_SIZE/8; i<OSC_TABLE_SIZE; i++)
+			{
+				table[i] = 0.80f;
+			}			
+			break;			
 			
+		// pulse wave 25%-75% ratio
+		case 7:
+		
+			for(int i=0; i<OSC_TABLE_SIZE/4; i++)
+			{
+				table[i] = -0.80f;
+			}
+			for(int i=OSC_TABLE_SIZE/4; i<OSC_TABLE_SIZE; i++)
+			{
+				table[i] = 0.80f;
+			}		
+			break;
+			
+		// pulse wave 33.3% ratio
+		case 8:
+			for(int i=0; i<OSC_TABLE_SIZE/3; i++)
+			{
+				table[i] = -0.80f;
+			}
+			for(int i=OSC_TABLE_SIZE/3; i<OSC_TABLE_SIZE; i++)
+			{
+				table[i] = 0.80f;
+			}				
+			break;
+
+		// default is SQUARE wave...
+		default:
+			for(int i=0; i<OSC_TABLE_SIZE/2; i++)
+			{
+				table[i] = -0.80f;
+			}
+			for(int i=OSC_TABLE_SIZE/2; i<OSC_TABLE_SIZE; i++)
+			{
+				table[i] = 0.80f;
+			}
 			break;
 			
 	}
@@ -250,10 +324,13 @@ float OSC::getEnvelopeOutput()
 	// if resting flag is on, means you're in release stage
 	if(resting)
 	{
-		if(!envRfinished)
+		if(!envRfinished && !forceSilenceAtBeginning)
 			output = sustainLevel * ( static_cast<float>(nReleaseFrames - releasePos) / static_cast<float>(nReleaseFrames) );
 		else
+		{
 			output = 0.0f;
+			phase = 0; // reset phase for next note!
+		}
 	}
 	
 	return output;
@@ -264,10 +341,18 @@ void OSC::setToRest()
 	resting = true;
 }
 
+void OSC::confirmFirstNoteIsRest()
+{
+	forceSilenceAtBeginning = true;
+}
+
 void OSC::advance()
 {
 	// advance on the sample table
 	phase += increment;
+	
+	adjustedFreq = freq;
+	
 	while(phase >= OSC_TABLE_SIZE)
 	{
 		phase -= OSC_TABLE_SIZE;
@@ -279,7 +364,22 @@ void OSC::advance()
 		adjustedFreq = astro.process(freq);
 		if(astro.stateChanged())
 			setIncrement(adjustedFreq);
+		
+		// if Fall is enabled, process and adjust frequency
+		if(fallActive)
+		{
+			adjustedFreq = fall.process(adjustedFreq);
+			setIncrement(adjustedFreq);
+		}
+
+		// if Rise is enabled, process and adjust frequency
+		if(riseActive)
+		{
+			adjustedFreq = rise.process(adjustedFreq);
+			setIncrement(adjustedFreq);
+		}		
 	}
+	
 	// if LFO is enabled, process and adjust frequency
 	else if(lfoEnabled)
 	{
@@ -289,16 +389,38 @@ void OSC::advance()
 		setIncrement(adjustedFreq);
 	}
 	
+	// if Fall is enabled, process and adjust frequency
+	if(fallActive && !astroEnabled)
+	{
+		adjustedFreq = fall.process(freq);
+		setIncrement(adjustedFreq);
+	}
+	
+	// if Rise is enabled, process and adjust frequency
+	if(riseActive && !astroEnabled)
+	{
+		adjustedFreq = rise.process(adjustedFreq);
+		setIncrement(adjustedFreq);
+	}
+	
 	// advance envelope also
 	advanceEnvelope();
 }
 
 void OSC::setNewNote(double newFreq)
 {
+	forceSilenceAtBeginning = false;
 	setFrequency(newFreq);
-	initializePhase();
+	// initializePhase();
 	refreshEnvelope();
 	resting = false;
+	if(fallActive && fall.octTraveled > 0.0)
+		stopFall();
+	if(riseActive && rise.pos > 30)
+		stopRise();
+	
+	// enable pop-guarding...
+	popGuardCount = 60;
 }
 
 // set the frequency and phase increment at once
@@ -345,6 +467,9 @@ void OSC::enableLFO()
 void OSC::disableLFO()
 	{ lfoEnabled = false; }
 	
+void OSC::initializeLFO()
+	{ lfo.initialize();	}
+	
 void OSC::setLFOwaitTime(int milliseconds)
 	{ lfo.setWaitTime(milliseconds); }
 
@@ -353,6 +478,62 @@ void OSC::setLFOrange(int cents)
 
 void OSC::setLFOspeed(double cyclePerSeconds)
 	{ lfo.setSpeed(cyclePerSeconds); }
+
+void OSC::startFall()
+{
+	fallActive = true;
+	fall.start();
+}
+
+void OSC::stopFall()
+{
+	fallActive = false;
+	fall.stop();
+}
+
+void OSC::setFallSpeed(double fallSpeed)
+{
+	fall.setSpeed(fallSpeed);
+}
+
+void OSC::setFallWait(double waitTimeMS)
+{
+	fall.setWaitTime(waitTimeMS);
+}
+
+void OSC::setFallToDefault()
+{
+	stopFall();	
+	fall.setToDefault();
+}
+
+void OSC::startRise()
+{
+	riseActive = true;
+	rise.start();
+}
+
+void OSC::stopRise()
+{
+	riseActive = false;
+	rise.stop();
+}
+
+void OSC::setRiseSpeed(double riseSpeed)
+{
+	rise.setSpeed(riseSpeed);
+}
+
+void OSC::setRiseRange(double riseRange)
+{
+	rise.setRange(riseRange);
+}
+
+void OSC::setRiseToDefault()
+{
+	stopRise();
+	rise.setToDefault();
+}
 
 void OSC::setAttackTime(int attackTimeMS)
 {
@@ -414,6 +595,13 @@ void OSC::initializePhase()
 	phase = 0;
 }
 
+void OSC::refreshForSongBeginning()
+{
+	initializePhase();
+	lastAmp = 0.0f;
+	refreshEnvelope();
+}
+
 float OSC::getOutput()
 {
 	/*
@@ -431,7 +619,24 @@ float OSC::getOutput()
 	int ph = static_cast<int> (phase);
 	// cout << "phase=" << phase << "..";
 	
-	float out = table[ph] * getEnvelopeOutput() * gain;
+	float out;
+	
+	if(yFlip > 0)
+		out = table[ph] * getEnvelopeOutput();
+	else
+		out = -table[ph] * getEnvelopeOutput();
+	
+	// if BeefUp is enabled... beef up and compress!
+	if(beefUp)
+		out = compress(out * beefUpFactor);
+	
+	out *= gain;
+	
+	// popguard - just for the first 2 frames...
+	if(popGuardCount>0)
+		out = popGuard(out);
+	else
+		lastAmp = out;
 	
 	historyWriteWait++;
 	if(historyWriteWait >= 8)
@@ -442,6 +647,48 @@ float OSC::getOutput()
 	
 	return out;
 }
+
+float OSC::compress(float in)
+{
+	float out = in;
+	if(in >= 0.0f && in > compThreshold) // positive value
+	{
+		float delta = in - compThreshold;
+		delta = delta / compRatio;
+		out = compThreshold + delta;
+		if(out>=0.99f) out = 0.99f;
+	}
+	else if(in <= 0.0f && in < -compThreshold) // negative value
+	{
+		float delta = in + compThreshold;
+		delta = delta / compRatio;
+		out = -compThreshold + delta;
+		if(out<=-0.99f) out = -0.99f;
+	}
+	return out;
+}
+
+float OSC::popGuard(float in)
+{
+	float inPositive = in + 1.0f;
+	if(inPositive<0.0f) inPositive = 0.0f;
+	float lastAmpPositive = lastAmp + 1.0f;
+	if(lastAmpPositive<0.0f) lastAmpPositive = 0.0f;
+	// float travelAmount = lastAmpPositive - inPositive;
+	inPositive += (lastAmpPositive - inPositive) * (static_cast<float>(popGuardCount) / 60.0f);
+	popGuardCount--;
+	
+	return (inPositive-1.0f);
+}
+
+void OSC::enableBeefUp()
+{ beefUp = true; }
+
+void OSC::disableBeefUp()
+{ beefUp = false; }
+
+void OSC::setBeefUpFactor(float factor)
+{ beefUpFactor = factor; }
 
 // push current data to table that keeps an array of historical data
 // (used for meter visualization)
@@ -472,4 +719,17 @@ void OSC::clearHistory()
 		history[i] = 0.0f;
 	historyWriteWait = 0;
 	historyWriteIndex = 0;
+}
+
+// set yFlip between 1.0 and -1.0
+// determines if wavetable is read as is or vertically inverted
+void OSC::flipYAxis()
+{
+	yFlip = -1.0f;
+}
+
+// reset yFlip to default normal 1.0 (table reading won't get vertically inverted)
+void OSC::resetYFlip()
+{
+	yFlip = 1.0f;
 }

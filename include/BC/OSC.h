@@ -10,6 +10,7 @@ class LFO;
 #include <vector>
 #include "Astro.h"
 #include "LFO.h"
+#include "Fall.h"
 
 using namespace std;
 
@@ -26,6 +27,8 @@ public:
 	
 	vector<float> table;
 	
+	int tableType;
+	float yFlip;
 	double phase;
 	double dblPhaseIntPart;
 	int intPhase;
@@ -38,6 +41,7 @@ public:
 	float gain;
 	
 	bool resting;
+	bool forceSilenceAtBeginning;
 	
 	int nEnvFrames;
 	int nAttackFrames;
@@ -60,6 +64,20 @@ public:
 	LFO lfo;
 	bool lfoEnabled;
 	
+	Fall fall;
+	bool fallActive;
+	
+	Rise rise;
+	bool riseActive;
+	
+	bool beefUp;
+	float beefUpFactor;
+	float compRatio;
+	float compThreshold;
+	
+	int popGuardCount;
+	float lastAmp;
+	
 	float history[OSC_HISTORY_SIZE];
 	int historyWriteWait;
 	int historyWriteIndex;
@@ -70,11 +88,18 @@ public:
 	void setTable(int type);	
 	void advance();
 	void setToRest();
+	void confirmFirstNoteIsRest();
 	void setNewNote(double newFreq);
 	void setFrequency(double noteFreq);
 	void setIncrement(double noteFreq);
 	void initializePhase();
+	void refreshForSongBeginning();
 	float getOutput();
+	float compress(float in);
+	float popGuard(float in);
+	void enableBeefUp();
+	void disableBeefUp();
+	void setBeefUpFactor(float factor);
 	void advanceEnvelope();
 	void refreshEnvelope();
 	float getEnvelopeOutput();
@@ -85,9 +110,20 @@ public:
 	void setAstroSpeed(int nCyclesPerSecond);
 	void enableLFO();
 	void disableLFO();
+	void initializeLFO();
 	void setLFOwaitTime(int milliseconds);
 	void setLFOrange(int cents);
 	void setLFOspeed(double cyclePerSeconds);
+	void startFall();
+	void stopFall();
+	void setFallSpeed(double fallSpeed);
+	void setFallWait(double waitTimeMS);
+	void setFallToDefault();
+	void startRise();
+	void stopRise();
+	void setRiseSpeed(double riseSpeed);
+	void setRiseRange(double riseRange);
+	void setRiseToDefault();
 	void setAttackTime(int attackTimeMS);
 	void setPeakTime(int peakTimeMS);
 	void setDecayTime(int decayTimeMS);
@@ -100,6 +136,8 @@ public:
 	void pushHistory(float g);
 	float getHistoricalAverage();
 	void clearHistory();
+	void flipYAxis();
+	void resetYFlip();
 };
 
 #endif

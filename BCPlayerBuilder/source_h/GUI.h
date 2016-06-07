@@ -8,6 +8,9 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <cstdlib>
+#include <ctime>
+#include <cmath>
 #include <SFML/Main.hpp>
 #include <SFML/Window.hpp>
 #include <SFML/Graphics.hpp>
@@ -21,12 +24,14 @@
 #include "Dialog.h"
 #include "Button.h"
 #include "Knob.h"
+#include "Config.h"
 
 class MPlayer;
 class MML;
 class Dialog;
 class Button;
 class Knob;
+class Config;
 // class OpenFileDialog;
 
 class Meter
@@ -113,6 +118,10 @@ public:
 	bool quickMessageActive;
 	sf::Clock quickMessageClock;
 	
+	sf::Text versionText;
+	sf::Text authorText; // goes with version text (right below)
+	bool versionTextActive;
+	
 	Help(){}
 	~Help(){}
 	
@@ -137,6 +146,15 @@ public:
 		quickMessageText.setCharacterSize(FONTSIZE);
 		quickMessageText.setColor(sf::Color(255,220,220));
 		quickMessageFrame.setFillColor(sf::Color(100,10,10));
+		
+		// initialize version text (author text goes with this)
+		versionText.setFont(helpFont);
+		versionText.setCharacterSize(FONTSIZE);
+		versionText.setColor(sf::Color(200,200,200));
+		authorText.setFont(helpFont);
+		authorText.setCharacterSize(FONTSIZE);
+		authorText.setColor(sf::Color(200,200,200));
+		deactivateVersionText(); // begin inactive...
 	}
 	// set text for given index
 	void set(int index, const std::string &helpText, float xx, float yy)
@@ -180,15 +198,16 @@ public:
 		strQuickMessage = qText;
 		activateQuickMessage();
 		
-		int wWidth = w->getSize().x;
+		// int wWidth = w->getSize().x;
+		int wWidth = 840;
 		int qmFrameX;
 
 		quickMessageText.setString(strQuickMessage);
 		sf::FloatRect fRect = quickMessageText.getGlobalBounds();
-		quickMessageFrame.setSize(sf::Vector2f(fRect.width + 60, fRect.height + 10));
-		qmFrameX = wWidth - fRect.width - 60;
+		quickMessageFrame.setSize(sf::Vector2f(fRect.width + 40, fRect.height + 10));
+		qmFrameX = wWidth - fRect.width - 40;
 		quickMessageFrame.setPosition(sf::Vector2f(qmFrameX, 0));
-		quickMessageText.setPosition(sf::Vector2f(qmFrameX + 30, 3));
+		quickMessageText.setPosition(sf::Vector2f(qmFrameX + 20, 3));
 		
 		// reset the timer...
 		quickMessageClock.restart();
@@ -218,6 +237,31 @@ public:
 		checkQuickMessageExpiration();
 	}
 	
+	// version information to display at bottom of logo
+	void setVersionText(const std::string &strVersion, const std::string &strAuthor)
+	{
+		versionText.setString(strVersion);
+		sf::FloatRect fRect = versionText.getGlobalBounds();
+		versionText.setPosition(sf::Vector2f(830 - fRect.width, 80 - fRect.height));
+		authorText.setString(strAuthor);
+		fRect = authorText.getGlobalBounds();
+		authorText.setPosition(sf::Vector2f(830 - fRect.width, 96 - fRect.height));		
+	}
+	void activateVersionText()
+		{ versionTextActive = true; }
+	void deactivateVersionText()
+		{ versionTextActive = false; }
+	bool versionTextIsActive()
+		{ return versionTextActive; }
+	
+	// draw the version text with number at the bottom of logo
+	void drawVersionText()
+	{
+		w->draw(versionText);	
+		w->draw(authorText);
+	}
+	
+	
 private:
 
 };
@@ -227,8 +271,8 @@ class Progress
 
 public:
 
-	static const float BAR_X = 680.0;
-	static const float BAR_Y = 210.0;
+	static const float BAR_X = 686.0;
+	static const float BAR_Y = 214.0;
 	static const float BAR_W = 140.0;
 	static const float BAR_H = 4.0;
 	static const float MARKER_W = 12.0;
@@ -291,6 +335,202 @@ private:
 	
 };
 
+class Omake
+{
+
+public:
+	
+	static const float TWOPI = 6.28318530718;
+	static const int N_STARS = 50;
+	static const int WINDOW_WIDTH = 840;
+	static const int WINDOW_HEIGHT = 640;
+	std::string currentDir;
+	sf::RectangleShape stars[N_STARS];
+	sf::Sprite fighter[2];
+	sf::Texture fighterTexture[2];
+	sf::RectangleShape laser;
+	float sx[N_STARS];
+	float sy[N_STARS];
+	sf::RenderWindow* w;
+	float scrollSpeed;
+	bool active;
+	float fx, fy;
+	float fxDeviation, fyDeviation;
+	int fighterState;
+	float rad, radY;
+	float lx, ly;
+	int shootTimer;
+	sf::Clock animationClock;
+	float currentTime;
+	float lastTime;
+	float elapsed;
+	float fps;
+	float adjustRatio;
+	float fighterStateDelta;
+	
+	Omake(){}
+	~Omake(){}
+
+	void initialize(sf::RenderWindow* wObj)
+	{
+		lastTime=0;
+		currentTime=0;
+		elapsed=0;
+		fps=0;
+		adjustRatio = 1.0f;
+		fighterStateDelta = 0;
+		animationClock.restart();
+		active = false;
+		fighterState = 0;
+		fx = 350 - 36; // fighter dimention (72x88)
+		fy = -88;
+		
+		// RenderWindow to draw animation to
+		w = wObj;
+		
+		// initialize random seed
+		srand(time(NULL));
+		
+		// load fighter images
+		string fighter1FilePath = currentDir + "\\images\\fighter_1.png";
+		if(!fighterTexture[0].loadFromFile(fighter1FilePath))
+			cout << "fighter_1.png: load error!\n";
+		string fighter2FilePath = currentDir + "\\images\\fighter_2.png";
+		if(!fighterTexture[1].loadFromFile(fighter2FilePath))
+			cout << "fighter_2.png: load error!\n";
+		fighter[0].setTexture(fighterTexture[0]);
+		fighter[1].setTexture(fighterTexture[1]);
+		
+		// initialize laser
+		laser.setSize(sf::Vector2f(6, 70));
+		laser.setFillColor(sf::Color(170, 110, 230));
+		
+		// initialize stars with random colors and positions
+		for(int i=0;i<N_STARS;i++)
+		{	
+			stars[i].setSize(sf::Vector2f(4,4));
+			int r = rand() % 256;
+			int g = rand() % 256;
+			int b = rand() % 256;
+			stars[i].setFillColor(sf::Color(r,g,b));
+			sx[i] = rand() % WINDOW_WIDTH;
+			sy[i] = rand() % WINDOW_HEIGHT;
+			stars[i].setPosition(sf::Vector2f(sx[i],sy[i]));
+		}
+		resetStars();
+		resetFighter();
+	}
+	
+	void setCurrentDir(const std::string &cDir)
+	{
+		currentDir = cDir;
+	}
+	
+	void resetStars()
+	{ scrollSpeed = 0; }
+	
+	void updateStars()
+	{
+		scrollSpeed += 0.15f * adjustRatio;
+		if(scrollSpeed > (22.0f * adjustRatio))
+			scrollSpeed = 22.0f * adjustRatio;
+		for(int i=0; i<N_STARS; i++)
+		{
+			sy[i] += scrollSpeed;
+			if(sy[i]>WINDOW_HEIGHT)
+				sy[i] -= WINDOW_HEIGHT;
+			stars[i].setPosition(sf::Vector2f(sx[i],sy[i]));			
+		}
+	}
+	
+	void resetFighter()
+	{
+		fx = 350 - 36;
+		fy = -140.0f;
+		fxDeviation = -250.0f;
+		fyDeviation = 0;
+		rad = TWOPI / 2.0f;
+		radY = 0;
+		shootTimer = rand() % 120; // keeps track of shoot timing
+		lx = -10; // set to out of screen (no show)
+		ly = -100;
+	}
+	
+	void updateFighter()
+	{
+		// move fighter
+		if(fy<470)
+			fy+= 7.0f * adjustRatio;
+		fxDeviation = cos(rad) * 250.0f;
+		rad += 0.06f * adjustRatio;
+		if(rad > TWOPI) rad -= TWOPI;
+		fyDeviation = sin(radY) * 40.0f;
+		radY += 0.074f * adjustRatio;
+		if(radY > TWOPI) radY -= TWOPI;
+
+		// timer determines laser's shooting time
+		if(shootTimer <= 0)
+		{
+			shootTimer = rand() % 100;
+			lx = (fx + fxDeviation) + 33.0f;
+			ly = fy;
+		}
+		ly = ly - 25.0f * adjustRatio;
+		
+		// laser's y pos, if reached top screen, only then advance timer
+		if(ly <= -100)
+		{
+			ly = -100;
+			shootTimer--;
+		}
+
+		// flip fighter's character image, set position
+		fighterStateDelta += elapsed;
+		if(fighterStateDelta > 0.1f)
+		{
+			fighterStateDelta = 0;
+			fighterState++;
+		}
+		if(fighterState>=2) fighterState = 0;
+		// fx = 400; fy = 400;
+		fighter[0].setPosition(sf::Vector2f(fx + fxDeviation, fy + fyDeviation));
+		fighter[1].setPosition(sf::Vector2f(fx + fxDeviation, fy + fyDeviation));
+		
+		// set laser's position
+		laser.setPosition(sf::Vector2f(lx, ly));
+	}
+	
+	void draw()
+	{
+		currentTime = animationClock.getElapsedTime().asSeconds();
+		elapsed = min(.1f, (currentTime - lastTime));
+		fps = 1.f / elapsed;
+		adjustRatio = elapsed / .02f;
+		lastTime = currentTime;
+		
+		updateStars();
+		updateFighter();
+		
+		// now, draw
+		updateStars();
+		for(int i=0; i<N_STARS; i++)
+			w->draw(stars[i]);		
+		w->draw(laser); // draw laster, too
+		w->draw(fighter[fighterState]);		
+	}
+	
+	void activate()
+	{ active = true; }
+	void deactivate()
+	{ 
+		active = false; 
+		resetStars();
+		resetFighter();
+	}
+	bool isActive()
+	{ return active; }
+};
+
 class GUI
 {
 
@@ -302,9 +542,14 @@ public:
 	static const double WINDOW_HEIGHT = 640;
 
 	static const int TEXT_WIDTH = 50;
-	static const int TEXT_HEIGHT = 22;
+	static const int TEXT_HEIGHT = 24;
 	static const int TEXT_TOP_X = 10;
 	static const int TEXT_TOP_Y = 10;
+	static const int PANEL_TOP_X = 686;
+	static const int PANEL_TOP_Y;
+	static const std::string STR_VERSION;
+	
+	Config config;
 
 	sf::RenderWindow window;
 	sf::RenderWindow* wPtr;
@@ -337,6 +582,7 @@ public:
 	sf::Clock blinkClock;
 	sf::Clock meterClock;
 	sf::Clock autoSaveClock;
+	sf::Clock audioCheckClock;
 
 	float charHeight;
 	float charWidth;
@@ -374,10 +620,12 @@ public:
 	bool rightKeyFiring;
 	int rightProcessedCount;
 
-	string defaultPath;
-	string currentPathAndFileName;
-	string currentFileName;
-	string lastSavedPathAndFileName;
+	std::string installDir;
+	std::string defaultPath;
+	std::string currentPathAndFileName;
+	std::string currentPath;
+	std::string currentFileName;
+	std::string lastSavedPathAndFileName;
 
 	bool anotherThreadRunning;
 
@@ -415,6 +663,7 @@ public:
 	Meter meter;
 	Help help;
 	Progress progress;
+	Omake omake;
 	
 	sf::RectangleShape backPanel;
 	// sf::RectangleShape progress; // DEBUG
@@ -464,6 +713,9 @@ public:
 	void adjustWindowSize();
 	void autoSave();
 	void quickSave();
+	void handleAudioChecking();
+	
+	void dump(const std::string &dump); // debug utility function
 
 private:
 

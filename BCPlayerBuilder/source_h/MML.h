@@ -19,6 +19,8 @@ class MML
 
 public:
 
+	static const int N_EVENT_TAGS = 256;
+
 	// constructor
 	MML();
 	MML(double sampleRate, double tempo);
@@ -42,9 +44,15 @@ public:
 	int countDigits(std::string snippet);
 	
 	void errLog(std::string errText1, std::string errText2="");
+	std::string toString(int n);
 	
 	// destructor
 	~MML();
+	
+	std::string eventTag[N_EVENT_TAGS];
+	int eventTagLen[N_EVENT_TAGS];
+	std::string eventTagDrum[N_EVENT_TAGS];
+	int eventTagLenDrum[N_EVENT_TAGS];
 	
 	// MData data[4];
 	std::string originalSource;

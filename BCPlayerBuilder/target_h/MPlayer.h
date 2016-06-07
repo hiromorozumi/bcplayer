@@ -55,7 +55,11 @@ public:
 	float compThreshold;
 	float compRatio;
 	bool delayEnabled;
+	bool ringModEnabled[9];
+	int ringModFeed[9];
+	bool ringModMute[9];
 	bool loopEnabled;
+	int repeatsRemaining;
 	bool songFinished;
 
 	bool channelDone[9];
@@ -65,13 +69,16 @@ public:
 	double freqNote[9];
 	int noteIndex[9];
 	int dNoteIndex;
+	int eventIndex[9];
+	int dEventIndex;
 	int currentDrumNote;
 
 	float sndBuffer[88200];
 	
 	PaStreamParameters outputParameters;
 	PaStream* stream;
-	PaError err;	
+	PaError err;
+	bool appIsExiting;
 
 	MPlayer();
 	~MPlayer();
@@ -96,6 +103,7 @@ public:
 	void activateDrumChannel();
 	void enableLooping();
 	void disableLooping();
+	void setRepeatsRemaining(int value);
 	void advance();
 	float getMix(int channel);
 	float compress(float input);
@@ -118,9 +126,21 @@ public:
 					->playerCallback(inputBuffer, outputBuffer,
 					framesPerBuffer, timeInfo, statusFlags);
 			}
+	
+	void playerStoppedCallback();
+	
+	// this static function will only redirect to stream-stopped callback (above)
+	static void paStoppedCallback( void *userData )
+			{	cout << "stream finished callback called! step 1\n"; // DEBUG
+				((MPlayer*)userData)->playerStoppedCallback(); }
 
 	void handlePaError( PaError e );
 	void initialize();
+	void restartStream();
+	void stopStream();
+	void declareAppTermination();
+	std::string getStreamStateString();
+	bool getStreamState();
 	void resetForNewSong();
 	void close();
 	void start();
@@ -130,6 +150,7 @@ public:
 	void goToBeginning();
 	long getSongLastFrame();
 	long getSongLastFramePure();
+	long getFramePos();
 	bool isPlaying();
 	int getTableType();
 	void setTableType(int type);
@@ -138,6 +159,10 @@ public:
 	void disableDelay();
 	void setAstro(int channel, int nCyclesPerSecond);
 	void disableAstro(int channel);
+	void enableRingMod(int channel, int modulatorChannel);
+	void disableRingMod(int channel);
+	void processEvent(int channel, int eType, int eParam);
+	void processDrumEvent(int eType, int eParam);
 	std::string exportToFile(string filename);
 	int fillExportBuffer(float* buffer, int framesToWrite, long startFrame, int songFrameLen);
 	float getHistoricalAverage(int channel);
