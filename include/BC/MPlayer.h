@@ -19,6 +19,7 @@ class DelayLine;
 #include "MData.h"
 #include "DData.h"
 #include "BC/portaudio.h"
+#include <iostream>
 
 #include "SFX.h"
 
@@ -131,7 +132,7 @@ public:
 	
 	// this static function will only redirect to stream-stopped callback (above)
 	static void paStoppedCallback( void *userData )
-			{	cout << "stream finished callback called! step 1\n"; // DEBUG
+			{	std::cout << "stream finished callback called! step 1\n"; // DEBUG
 				((MPlayer*)userData)->playerStoppedCallback(); }
 
 	void handlePaError( PaError e );
